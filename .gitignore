@@ -1,3 +1,4 @@
 reelkit-data/
 node_modules/
 .env
+*.part.mp4

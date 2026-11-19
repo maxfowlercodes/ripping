@@ -1,18 +1,6 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Reelkit</title>
-<style>:root{--bg:#0b0f1a;--card:#141b2e;--fg:#e8ecf5;--mut:#8b95b0;--ac:#4ade80}@media(prefers-color-scheme:light){:root{--bg:#f6f8fc;--card:#fff;--fg:#0f172a;--mut:#64748b;--ac:#16a34a}}
-body{margin:0;font:15px system-ui;background:var(--bg);color:var(--fg)}main{max-width:980px;margin:auto;padding:16px}h1{font-size:20px}h2{font-size:14px;color:var(--mut);text-transform:uppercase;letter-spacing:.06em}
-.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px}.card{background:var(--card);border-radius:12px;padding:12px}video{width:100%;border-radius:8px;background:#000;aspect-ratio:9/16}
-.pill{font-size:12px;padding:2px 8px;border-radius:99px;background:var(--ac);color:#04210f}.row{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}.day{background:var(--card);border-radius:8px;min-height:64px;padding:6px;font-size:12px}.day b{color:var(--mut)}
-table{width:100%;border-collapse:collapse}td,th{padding:6px;text-align:left;border-bottom:1px solid #8883}</style></head><body><main>
-<h1>Reelkit</h1><h2>This week</h2><div class="row" id="cal"></div><h2>Reels</h2><div class="grid" id="reels"></div><h2>Analytics (day 1/3/7)</h2><div class="card"><table id="an"></table></div></main>
-<script>
-const $=id=>document.getElementById(id);
-fetch('/api/state').then(r=>r.json()).then(({reels})=>{
- const days=[...Array(7)].map((_,i)=>{const d=new Date();d.setDate(d.getDate()+i);return d});
- $('cal').innerHTML=days.map(d=>{const k=d.toDateString();const items=reels.filter(r=>r.scheduledAt&&new Date(r.scheduledAt).toDateString()===k);
-  return `<div class="day"><b>${d.toLocaleDateString(undefined,{weekday:'short',day:'numeric'})}</b>${items.map(r=>`<div>${r.title}</div>`).join('')}</div>`}).join('');
- $('reels').innerHTML=reels.map(r=>`<div class="card">${r.hasVideo?`<video controls preload="none" src="/video/${r.slug}"></video>`:''}<p><b>${r.title}</b><br><span class="pill">${r.status}</span> lint ${r.lintScore??'–'} ${r.virality?`· score ${r.virality.score}`:''}</p></div>`).join('')||'<p>No reels yet. Run: reelkit new "My first reel"</p>';
- const rows=reels.filter(r=>r.snapshots&&r.snapshots.length).map(r=>{const p=new Date(r.postedAt);const at=d=>{const s=[...r.snapshots].reverse().find(s=>(new Date(s.t)-p)/864e5<=d+.5);return s?s.views:'–'};return `<tr><td>${r.title}</td><td>${at(1)}</td><td>${at(3)}</td><td>${at(7)}</td></tr>`});
- $('an').innerHTML='<tr><th>Reel</th><th>Day 1</th><th>Day 3</th><th>Day 7</th></tr>'+(rows.join('')||'<tr><td colspan=4>No data yet. Run: reelkit analyze</td></tr>');
-});
-</script></body></html>
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Reelkit</title><link rel="manifest" href="/manifest.webmanifest"><link rel="icon" href="/icon.svg"><meta name="theme-color" content="#0b0f1a">
+<link rel="stylesheet" href="/app.css"></head><body>
+<header><div class="brand"><img src="/icon.svg" width="28" height="28" alt=""><b>Reelkit</b></div><nav id="nav"></nav></header>
+<main id="main"></main><div id="toast"></div>
+<script src="/app.js"></script></body></html>

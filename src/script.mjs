@@ -1,18 +1,21 @@
 // Script format: plain text, one line = one scene/beat. First line = hook, last line = CTA.
 // Optional first line "# Title". Lines starting with // are notes. "[style: x]" directive allowed.
+import { splitDirective, extractKeys } from './directives.mjs';
+
 export function parseScript(text) {
   const lines = text.split(/\r?\n/);
   let title = '', style = null;
-  const beats = [];
+  const beats = [], visuals = [], keys = [];
   for (const raw of lines) {
     const l = raw.trim();
     if (!l || l.startsWith('//')) continue;
     if (l.startsWith('# ')) { title = l.slice(2).trim(); continue; }
     const m = l.match(/^\[style:\s*([\w-]+)\]$/i);
     if (m) { style = m[1].toLowerCase(); continue; }
-    beats.push(l);
+    const d = splitDirective(l); const k = extractKeys(d.text);
+    beats.push(k.text); visuals.push(d.visual); keys.push(k.keys);
   }
-  return { title, style, beats };
+  return { title, style, beats, visuals, keys };
 }
 
 const words = s => s.split(/\s+/).filter(Boolean);

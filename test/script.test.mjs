@@ -13,7 +13,7 @@ One idea per line.
 Comment "REEL" for the template.`;
 test('parse title/beats/style', () => {
   const s = parseScript('# A\n[style: sunset]\n// note\nOne\nTwo');
-  assert.deepEqual(s, { title: 'A', style: 'sunset', beats: ['One', 'Two'] });
+  assert.equal(s.title, 'A'); assert.equal(s.style, 'sunset'); assert.deepEqual(s.beats, ['One', 'Two']);
 });
 test('good script scores high', () => assert.ok(lint(parseScript(good)).score >= 85));
 test('bad hook and no CTA are flagged', () => {
