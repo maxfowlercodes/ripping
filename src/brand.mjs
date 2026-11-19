@@ -8,7 +8,7 @@ export const DEFAULT_BRAND = {
   competitors: [],      // instagram handles to watch
   production: { style: 'auto', avatar: 'founder', voice: 'auto', voiceId: '', sfx: true, lang: 'en', music: '', brandColors: null },
   posting: { method: 'computer', mode: 'review', account: '', username: '', times: ['08:00'], trial: true },
-  daily: { enabled: true, time: '09:00', autopilot: false, graceMinutes: 90, minReferences: 3 },
+  daily: { enabled: true, time: '09:00', autopilot: false, graceMinutes: 90, minReferences: 3, requireReferences: false },
   chat: { enabled: false, businessName: '', tagline: '', welcome: '', faq: [], leadMagnet: { label: '', text: '', url: '' }, consent: 'I agree that my details are sent to the business owner and that an AI assistant (Anthropic Claude) processes this chat to reply.', tunnel: true, port: 4178, maxMessages: 30, accent: '' },
   notify: true,
 };

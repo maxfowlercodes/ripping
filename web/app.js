@@ -6,7 +6,7 @@ const toast = m => { const t = $('#toast'); t.textContent = m; t.classList.add('
 const mmss = s => `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, '0')}`;
 const fmt = n => (n == null ? '–' : n >= 1e6 ? (n / 1e6).toFixed(1) + 'M' : n >= 1e4 ? Math.round(n / 1e3) + 'K' : n.toLocaleString());
 const S = { state: null, slug: localStorage.getItem('rk.slug') || '', style: localStorage.getItem('rk.style') || 'aurora-dark', timers: [] };
-const stop = () => { S.timers.forEach(clearInterval); S.timers = []; };
+const stop = () => { S.timers.forEach(clearInterval); S.timers = []; clearTimeout(S.tt); clearTimeout(S.rt); };
 const reels = () => S.state?.reels || [];
 const cur = () => reels().find(r => r.slug === S.slug) || reels()[0];
 async function refresh() { S.state = await api('/state'); if (!S.slug && reels()[0]) S.slug = reels()[0].slug; }
@@ -150,7 +150,9 @@ async function repurpose() {
 
 
 // ---------------------------------------------------------------- Today
-async function today() {
+async function today(poll) {
+  clearTimeout(S.tt); if (poll && (location.hash || '#today') !== '#today') return;
+  if (poll && ((document.activeElement && /^(TEXTAREA|INPUT|SELECT)$/.test(document.activeElement.tagName) && document.activeElement.closest('#main')) || [...document.querySelectorAll('#main textarea')].some(x => x.value))) { S.tt = setTimeout(() => today(true), 2500); return; } // do not wipe what you are typing
   const t = await api('/today'); const gd = await api('/guide'); const next = gd.steps.filter(x => !x.done && x.id !== 'chat').slice(0, 3);
   const run = t.runs.find(r => ['queued', 'running', 'waiting'].includes(r.status)) || t.runs[0]; const live = run && ['queued', 'running', 'waiting'].includes(run.status); const u = t.usage;
   const hour = new Date().getHours(); const hi = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
@@ -164,16 +166,19 @@ async function today() {
   <p class="mut" style="margin:14px 0 0;font-size:13px">${esc(t.mode)} mode · ${u.calls} Claude calls today (${u.cacheHits} free from cache) · <a href="#claude">Control models</a></p></div>
   ${run ? `<div class="card"><div class="row"><b class="grow">${live ? 'In progress' : 'Last run'}</b><span class="chip ${run.status === 'done' ? 'cta' : ''}">${esc(run.status)}</span>${live ? '<button class="alt sm" id="cancel">Cancel</button>' : ''}</div>
     <div class="tl">${run.steps.map(s => `<div class="st"><span class="dot ${({ done: 'done', running: 'run', waiting: 'wait', failed: 'fail' })[s.status] || ''}">${s.status === 'done' ? ic('check', 12) : s.status === 'failed' ? ic('x', 12) : ''}</span><div><div class="nm">${esc(s.name)}</div>${s.detail ? `<div class="dt">${esc(s.detail)}</div>` : ''}</div></div>`).join('')}</div>
+    ${run.status === 'waiting' && run.gate ? `<div class="li" style="padding:12px 0;border-top:1px solid var(--sep);margin-top:6px"><span class="tile t-orange">${ic('bell', 17)}</span><div class="grow"><b>Waiting for you</b><span class="mut">${esc(run.gate.message || '')}</span></div>${run.gate.type === 'refs' ? `<button class="alt sm" id="skiprefs">Skip references</button>` : ''}</div>` : ''}
+    ${run.status === 'running' && run.updated && Date.now() - run.updated > 180000 ? `<p class="mut" style="font-size:13px">No progress for ${Math.round((Date.now() - run.updated) / 60000)} minutes. The background worker may have stopped: Cancel and start again.</p>` : ''}
     ${run.error ? `<p class="bad">${esc(run.error)}</p>` : ''}${run.ctx?.slug && run.status === 'done' ? `<video controls playsinline src="/file/${esc(run.ctx.slug)}/reel.mp4" style="margin-top:14px"></video>` : ''}</div>` : ''}
   ${t.inbox.map(inboxCard(t)).join('')}
   <div class="card"><div class="row"><b class="grow">Ideas</b><button class="alt sm" id="genideas">${ic('spark', 14)} Generate 5</button></div>
   ${t.ideas.length ? `<div style="margin-top:6px">${t.ideas.map(i => `<div class="row" style="padding:12px 0;border-top:1px solid var(--sep)"><div class="grow"><b>${esc(i.hook)}</b><div class="mut" style="font-size:13px">${esc(i.payoff)}</div></div><button class="tint sm" data-run="${esc(i.id)}">Make this</button></div>`).join('')}</div>` : `<p class="mut">No ideas yet. ${t.refs} references saved. Run the deep research or generate a few.</p>`}</div>`;
   bindSeg('postmode', async v => { await api('/brand', { posting: { mode: v } }); });
   $('#go').onclick = async () => { await api('/run', { post: document.querySelector('#postmode .on').dataset.v }); toast('Started'); today(); };
-  const c = $('#cancel'); if (c) c.onclick = async () => { await api('/run/cancel', { id: run.id }); today(); };
+  const c = $('#cancel'); if (c) c.onclick = async () => { await api('/run/cancel', { id: run.id }); toast('Cancelled'); today(); };
+  const sk = $('#skiprefs'); if (sk) sk.onclick = async () => { if (run.gate?.inboxId) await api('/inbox/answer', { id: run.gate.inboxId, answer: { skip: true } }); toast('Continuing without references'); today(); };
   $('#genideas').onclick = async e => { e.target.disabled = true; e.target.textContent = 'Thinking…'; try { const r = await api('/ideas', { generate: true }); toast(`${r.added} new ideas`); } catch (er) { toast(er.message); } today(); };
-  document.querySelectorAll('[data-run]').forEach(b => (b.onclick = async () => { const i = t.ideas.find(x => x.id === b.dataset.run); await api('/run', { post: document.querySelector('#postmode .on').dataset.v, idea: i }); today(); }));
-  bindInbox(t); if (live) S.timers.push(setInterval(today, 2500));
+  document.querySelectorAll('[data-run]').forEach(b => (b.onclick = async () => { if (live) return toast('A run is already in progress. Cancel it or wait for it to finish.'); const i = t.ideas.find(x => x.id === b.dataset.run); await api('/run', { post: document.querySelector('#postmode .on').dataset.v, idea: i }); today(); }));
+  bindInbox(t); if (live) S.tt = setTimeout(() => today(true), 2500);
 }
 function inboxCard(t) {
   return it => {
@@ -298,7 +303,7 @@ const md = t => { const lines = esc(t).split('\n'); let out = '', inList = false
 
 // ---------------------------------------------------------------- Research
 async function research() {
-  const r = await api('/research'); const res = r.research; const stages = [['site', 'Your website'], ['audience', 'Your audience'], ['competitors', 'Competitors'], ['strategy', 'Strategy']];
+  clearTimeout(S.rt); const r = await api('/research'); const res = r.research; const stages = [['site', 'Your website'], ['audience', 'Your audience'], ['competitors', 'Competitors'], ['strategy', 'Strategy']];
   const { brand: b } = await api('/brand'); await refresh(); const job = S.state.jobs.find(j => j.type === 'research'); const running = job && ['queued', 'running'].includes(job.status);
   $('#main').innerHTML = `<h2>Research</h2><p class="sub">The first-time deep dive: what you really offer, who buys and in what words, what competitors do, and a content strategy. Runs once, saved, and feeds every script.</p>
   <div class="card"><div class="row"><div class="grow"><b>${res?.finished ? 'Research complete' : 'Not run yet'}</b><div class="mut">Website: ${esc(b.website || 'none yet (add it in Setup for better results)')} · uses Claude's web search + fetch (sonnet) · about 4 calls, 5 to 10 minutes</div></div>
@@ -308,7 +313,7 @@ async function research() {
   ${stages.map(([id]) => res?.stages?.[id]?.status === 'failed' ? `<p class="bad">${esc(res.stages[id].error)}</p>` : '').join('')}</div>
   ${r.report ? `<div class="card md">${md(r.report)}</div>` : ''}`;
   $('#go').onclick = async () => { await api('/research/run', { force: !!res?.finished }); toast('Started'); research(); };
-  if (running) S.timers.push(setInterval(research, 4000));
+  if (running) S.rt = setTimeout(research, 4000);
 }
 
 // ---------------------------------------------------------------- Leads & chat

@@ -24,7 +24,7 @@ const dir = () => ensureDir(path.join(home(), 'runs'));
 const rf = id => path.join(dir(), id + '.json');
 export const getRun = id => readJson(rf(id), null);
 export const listRuns = () => fs.readdirSync(dir()).filter(f => f.endsWith('.json')).map(f => readJson(path.join(dir(), f), null)).filter(Boolean).sort((a, b) => b.created.localeCompare(a.created));
-const save = r => writeJson(rf(r.id), r);
+const save = r => { r.updated = Date.now(); writeJson(rf(r.id), r); };
 
 export function startRun(opts = {}) {
   const b = getBrand(); const id = crypto.randomBytes(4).toString('hex');
@@ -56,6 +56,7 @@ async function stepRefs(r) {
   const b = getBrand(); const have = referenceCount(); const a = r.ctx.answers?.refs;
   if (a?.text) addFromText(a.text, b.niche || 'general');
   if (referenceCount() >= b.daily.minReferences || a?.skip || r.opts.skipRefs) return `${referenceCount()} references`;
+  if (!b.daily.requireReferences) return `${referenceCount()} references saved. Using your research instead; add references any time for better ideas`;
   throw new Wait({ type: 'refs', message: `I have ${have} reference reels, I'd like ${b.daily.minReferences}+. Paste some (url | views | baseline) or skip.`, inbox: { type: 'ask-references', title: 'Any reference reels today?', body: 'Paste links of reels that did well in your niche (url | views | account size). Or skip.' } });
 }
 

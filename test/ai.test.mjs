@@ -58,7 +58,7 @@ test('inbox: dedupe and resolve', () => {
 test('autopilot pauses at the brand gate and the references gate (no model calls made)', async () => {
   saveBrand({ product: '', audience: '', problem: '' }); let r = startRun({ post: 'none' }); r = await executeRun(r.id);
   assert.equal(r.status, 'waiting'); assert.equal(r.gate.type, 'brand');
-  saveBrand({ product: 'PriceLoop', audience: 'founders', problem: 'tire-kickers' }); answerGate(r.id, { ok: true }); r = await executeRun(r.id);
+  saveBrand({ product: 'PriceLoop', audience: 'founders', problem: 'tire-kickers', daily: { requireReferences: true } }); answerGate(r.id, { ok: true }); r = await executeRun(r.id);
   assert.equal(r.status, 'waiting'); assert.equal(r.gate.type, 'refs'); assert.equal(usageToday().calls, 1); // only the seeded ledger row above: no model was called
   answerGate(r.id, { text: 'https://www.instagram.com/a/reel/x/ | 2.4M | 170K | Free trials are killing your SaaS\nhttps://www.instagram.com/c/reel/y/ | 1M | 90K | second\nhttps://www.instagram.com/d/reel/z/ | 500K | 40K | third' }); r = await executeRun(r.id); // later steps hit the dry-run stub and may fail; irrelevant here
   assert.equal(r.steps.find(x => x.id === 'refs').status, 'done'); assert.equal(listSwipe({ status: 'saved' }).length, 3);

@@ -146,7 +146,7 @@ async function onboarding() {
       <div class="list">${g.steps.filter(x => x.id !== 'chat').map(x => `<a class="li" href="${esc(x.link)}" style="color:var(--text);text-decoration:none"><span class="${x.done ? 'ok' : 'mut'}">${ic(x.done ? 'check' : 'clock', 20)}</span><div class="grow"><b>${esc(x.title)}</b></div>${x.done ? '' : '<span class="mut" style="font-size:13px">Later</span>'}</a>`).join('')}</div>
       <p class="mut" style="font-size:14px">Your first reel will be render only, so nothing is posted. Watch it on Today, then switch to "Ask first" when you are happy.</p>
       <div class="onb-foot"><button class="alt" id="back">Back</button><span class="sp"></span><button class="alt" id="today">Go to Today</button><button class="lg" id="first">Make my first reel</button></div>`);
-      $('#back').onclick = () => go(i - 1); $('#today').onclick = () => (location.hash = '#today'); $('#first').onclick = async () => { await api('/run', { post: 'none' }); location.hash = '#today'; };
+      $('#back').onclick = () => go(i - 1); $('#today').onclick = () => (location.hash = '#today'); $('#first').onclick = async () => { await api('/run', { post: 'none', skipRefs: true }); location.hash = '#today'; };
     },
   };
   const draw = () => steps[OB_STEPS[i]]();
