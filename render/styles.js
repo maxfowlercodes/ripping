@@ -49,9 +49,9 @@
     colors: { bg1: '#0b3a8f', bg2: '#0a2a6b', dot: '#ffffff1f', accent: '#fde047', fg: '#ffffff', keyFg: '#0a2a6b', card: '#0e47b0', cardFg: '#ffffff' }, caption: cap({ weight: 700, size: 78, sizeVis: 66, ls: '0' }) });
   R('chat-pop',     { desc: 'Pastel candy with big chat bubbles', font: 'Inter', bg: 'gradient', key: 'highlight', transition: 'zoom',
     colors: { bg1: '#fde68a', bg2: '#fbcfe8', accent: '#ec4899', fg: '#3b0764', keyFg: '#ffffff', card: '#ffffff', cardFg: '#1f2937' }, caption: cap({ weight: 900 }) });
-  R('presenter-night', { desc: 'Animated presenter (free, lip-synced) over a mesh glow', font: 'Inter', bg: 'mesh', key: 'highlight', transition: 'wipe', grain: 0.06, avatar: { character: 'founder' },
+  R('presenter-night', { desc: 'Glowing voice orb that pulses with the narration, over a mesh glow', font: 'Inter', bg: 'mesh', key: 'highlight', transition: 'wipe', grain: 0.06, avatar: { character: 'orb' },
     colors: { bg1: '#080818', bg2: '#3730a3', accent: '#818cf8', accent2: '#c084fc', ribbon1: '#38bdf8', fg: '#ffffff', keyFg: '#0b0b24', card: '#14142b', cardFg: '#f1f5f9' }, caption: cap({}) });
-  R('presenter-day',   { desc: 'Animated presenter on a bright ribbon', font: 'Inter', bg: 'ribbon', key: 'highlight', transition: 'zoom', avatar: { character: 'founder' },
+  R('presenter-day',   { desc: 'Animated presenter on a bright ribbon', font: 'Inter', bg: 'ribbon', key: 'highlight', transition: 'zoom', avatar: { character: 'orb' },
     colors: { bg1: '#f8fafc', bg2: '#c7d2fe', ribbon1: '#a78bfa', ribbon2: '#fdba74', accent: '#4f46e5', fg: '#0f172a', keyFg: '#ffffff', card: '#ffffff', cardFg: '#0f172a' }, caption: cap({}) });
   R('presenter-bot',   { extends: 'presenter-night', desc: 'Robot presenter, terminal vibes', bg: 'grid', avatar: { character: 'robot' }, colors: { bg1: '#04110a', bg2: '#06240f', dot: '#22c55e18', accent: '#22d3ee', fg: '#e6fffa', keyFg: '#04110a', card: '#0a1f14', cardFg: '#e6fffa' } });
   R('presenter-blob',  { extends: 'presenter-day', desc: 'Friendly blob mascot presenter', bg: 'gradient', avatar: { character: 'blob' }, colors: { bg1: '#ffedd5', bg2: '#fecdd3', accent: '#ea580c', fg: '#431407', keyFg: '#ffffff' } });

@@ -10,6 +10,7 @@ import { synth, detectProvider, RTL, voiceCatalog } from './voice.mjs';
 import { transcribe, alignTokens, whisperAvailable } from './transcribe.mjs';
 import { writeSfx, eventsFor } from './sfx.mjs';
 import { assertDisk } from './storage.mjs';
+import { checkLayout } from './layoutqa.mjs';
 
 const sha = x => crypto.createHash('sha1').update(typeof x === 'string' ? x : JSON.stringify(x)).digest('hex').slice(0, 14);
 export const customStyleFiles = () => {
@@ -60,7 +61,7 @@ function encodeSegment(frames, fps, out) {
 
 const FALLBACKS = ['kokoro', 'piper', 'edge', 'sapi', 'say', 'espeak'];
 const est = t => Math.max(1.2, t.split(/\s+/).length / 2.6);
-export async function renderReel2({ script, style, voice = 'auto', lang = 'en', music, out, fps = 30, draft = false, avatarFile, avatar, brandColors, sync, voiceId, sfx, workDir, onLog = console.log, onProgress = () => {} }) {
+export async function renderReel2({ script, style, voice = 'auto', lang = 'en', music, out, fps = 30, draft = false, avatarFile, avatar, brandColors, sync, voiceId, sfx, workDir, fallbackStyles = ['glass', 'clean-white', 'mono-minimal', 'fintech-clean'], layoutCheck = true, onLog = console.log, onProgress = () => {} }) {
   ensureDir(workDir); assertDisk(1.5e9, workDir);
   const provider = detectProvider(voice); const dead = new Set();
   const syncWhisper = sync !== false && whisperAvailable();
@@ -148,6 +149,21 @@ export async function renderReel2({ script, style, voice = 'auto', lang = 'en', 
     const builtin = avatar && !String(avatar).startsWith('heygen') ? { character: String(avatar).replace(/^builtin:/, '') } : undefined;
     const spec = { style, beats: specBeats, total, rtl: RTL.has(lang), lang, envelope, avatar: builtin, colors: brandColors || undefined };
     await page.evaluate(s => RK.setup(s), spec);
+    // ---- layout QA: measure text clashes every 2s; if the chosen style clashes, try safer ones and keep the cleanest
+    let qa = null;
+    if (layoutCheck) {
+      try {
+        const qdir = ensureDir(path.join(workDir, 'qa')); let best = null; const cands = [style, ...fallbackStyles.filter(x => x !== style)].slice(0, 3);
+        for (const st of cands) {
+          spec.style = st; await page.evaluate(sp => RK.setup(sp), spec);
+          const q = await checkLayout(page, specBeats, total, { writeShot: async t => { const f = path.join(qdir, `clash_${st}_${t}.jpg`); await page.screenshot({ path: f, type: 'jpeg', quality: 70 }); return f; } }); q.style = st;
+          onLog(`layout check (${st}): ${q.checked} moments, ${q.issues.length ? q.issues.length + ' clash(es), e.g. ' + q.issues[0].text + ' at ' + q.issues[0].t + 's' : 'clean'}`);
+          if (!best || q.issues.length < best.issues.length) best = q; if (!q.issues.length) break;
+        }
+        if (best.style !== style) onLog(`layout check: using ${best.style} instead of ${style} to avoid clashing text`);
+        style = best.style; spec.style = style; await page.evaluate(sp => RK.setup(sp), spec); qa = { style, checked: best.checked, clashes: best.issues.length, examples: best.issues.slice(0, 5), shots: best.shots };
+      } catch (e) { onLog('layout check skipped: ' + e.message); spec.style = style; await page.evaluate(sp => RK.setup(sp), spec); }
+    }
 
     const eh = engineHash(); const segs = [];
     for (let i = 0; i < n; i++) {
@@ -179,7 +195,7 @@ export async function renderReel2({ script, style, voice = 'auto', lang = 'en', 
     if (fcx) a.push('-filter_complex', fcx.replace(/;$/, ''));
     a.push('-map', vmap, '-map', amap, ...vcodec, '-c:a', 'aac', '-t', String(total), '-movflags', '+faststart', out);
     r = run('ffmpeg', a); if (!r.ok) throw new Error('mux failed: ' + r.err.slice(-500));
-    return { out, durations: specBeats.map(b => +(b.end - b.start).toFixed(2)), seconds: +total.toFixed(1), provider, spec };
+    return { out, durations: specBeats.map(b => +(b.end - b.start).toFixed(2)), seconds: +total.toFixed(1), provider, spec, style, qa };
   } finally { await browser.close(); }
 }
 

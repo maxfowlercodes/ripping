@@ -41,18 +41,49 @@ export const SAFETY = () => `You are operating the user's OWN Instagram account 
 
 const postSchema = { type: 'object', properties: { status: { enum: ['ready', 'posted', 'login_required', 'error'] }, note: { type: 'string' }, url: { type: 'string' } }, required: ['status'] };
 
-/** Phase A: upload + caption + advance to the final Share screen, then STOP. */
+/** Attach a file to the page's <input type=file> through the DevTools socket. Instagram's own file chooser is a native OS dialog that
+ *  browser-automation tools often cannot answer (it timed out for the first real user), so Reelkit hands the file over directly. */
+export async function attachFile(file, port = CDP_PORT) {
+  if (typeof WebSocket === 'undefined') throw new Error('Needs Node 22+');
+  const list = await (await fetch(`http://127.0.0.1:${port}/json/list`, { signal: AbortSignal.timeout(2500) })).json();
+  const pages = list.filter(t => t.type === 'page' && t.webSocketDebuggerUrl); const t = pages.find(x => /instagram\.com/.test(x.url)) || pages[0]; if (!t) throw new Error('No browser tab is open');
+  return new Promise((resolve, reject) => {
+    const ws = new WebSocket(t.webSocketDebuggerUrl); let id = 0; const pending = new Map(); const to = setTimeout(() => { try { ws.close(); } catch {} reject(new Error('attach timeout')); }, 12000);
+    const call = (method, params) => new Promise((res, rej) => { const i = ++id; pending.set(i, { res, rej }); ws.send(JSON.stringify({ id: i, method, params })); });
+    ws.onmessage = e => { const m = JSON.parse(e.data); const p = pending.get(m.id); if (p) { pending.delete(m.id); m.error ? p.rej(new Error(m.error.message)) : p.res(m.result); } };
+    ws.onerror = () => { clearTimeout(to); reject(new Error('devtools connection failed')); };
+    ws.onopen = async () => {
+      try {
+        const inputs = await call('Runtime.evaluate', { expression: `(() => { const l = [...document.querySelectorAll('input[type=file]')]; return l.length })()`, returnByValue: true });
+        if (!inputs.result?.value) throw new Error('No file input found on the page');
+        const r = await call('Runtime.evaluate', { expression: `(() => { const l = [...document.querySelectorAll('input[type=file]')]; return l.find(i => /video|mp4|quicktime/i.test(i.accept || '')) || l[l.length - 1]; })()` });
+        await call('DOM.setFileInputFiles', { objectId: r.result.objectId, files: [file] }); clearTimeout(to); ws.close(); resolve(true);
+      } catch (e) { clearTimeout(to); try { ws.close(); } catch {} reject(e); }
+    };
+  });
+}
+
+/** Phase A: open the composer, hand over the video, add the caption, advance to the final Share screen, then STOP. */
 export async function prepareReelPost({ file, caption, trial = false, log }) {
   await ensureBrowser();
-  const prompt = `Post a reel on Instagram web.
-1. Go to ${IG_URL()}/ and click "Create" (+) in the left menu, then "Post".
-2. In the dialog choose "Select from computer" and upload this exact file: ${file}
-3. Click Next through the crop/trim step and the edit step (accept defaults; if asked "Video posts are now shared as reels" click OK).
-4. In the caption box type exactly this caption (keep line breaks):
+  const tail = `4. Click Next through the crop/trim step and the edit step (accept defaults; if asked "Video posts are now shared as reels" click OK).
+5. In the caption box type exactly this caption (keep line breaks):
 ${caption}
-${trial ? '5. If there is a "Trial" / "Share with non-followers first" option, turn it on.\n' : ''}Then STOP on the final screen with the Share button visible. DO NOT click Share.
+${trial ? '6. If there is a "Trial" / "Share with non-followers first" option, turn it on.\n' : ''}Then STOP on the final screen with the Share button visible. DO NOT click Share.
 Reply with JSON {status:"ready", note:"..."} when ready, {status:"login_required"} if you are logged out, or {status:"error", note} otherwise.`;
-  const r = await askClaude({ task: 'computer_post', prompt, system: SAFETY(), schema: postSchema, mcpConfig: mcpConfig(), allowedTools: ALLOWED, validate: o => o.status === 'ready' || o.status === 'login_required' || `status ${o.status}: ${o.note || ''}`, timeoutMs: 600000, force: true, cwd: path.dirname(file), log });
+  const open = `Open Instagram web and get the "Create new post" dialog to the first screen, where "Select from computer" is visible.
+1. If any dialog, file picker or half-finished post from an earlier attempt is open, close it (Escape, or Discard if asked) and start clean.
+2. Go to ${IG_URL()}/ and click "Create" (+) in the left menu, then "Post" if a submenu appears.
+3. STOP as soon as you can see the "Select from computer" button. Do NOT click it, and do not try to upload anything yourself.
+Reply JSON {status:"ready"} when that screen is showing, {status:"login_required"} if you are logged out, or {status:"error", note}.`;
+  const opts = { system: SAFETY(), schema: postSchema, mcpConfig: mcpConfig(), allowedTools: ALLOWED, timeoutMs: 600000, force: true, cwd: path.dirname(file), log };
+  const a = await askClaude({ task: 'computer_post', prompt: open, validate: o => o.status === 'ready' || o.status === 'login_required' || `status ${o.status}: ${o.note || ''}`, ...opts, maxTurns: 16 });
+  if (a.output.status === 'login_required') return a.output;
+  let attached = false; try { log?.('Handing the video to Instagram...'); attached = await attachFile(path.resolve(file)); } catch (e) { log?.('Direct attach failed (' + e.message + '), asking Claude to use the file chooser'); }
+  const prompt = attached
+    ? `The video file has just been attached to the Instagram "Create new post" dialog. Wait a few seconds for the preview to load.\n${tail.replace(/^4\./, '1.').replace('\n5.', '\n2.').replace('\n6.', '\n3.')}`
+    : `Post a reel on Instagram web. The "Create new post" dialog is open.\n1. Click "Select from computer" and upload this exact file: ${file}\n2. If the file chooser does not respond within a minute, STOP and report {status:"error", note}.\n${tail.replace(/^4\./, '3.')}`;
+  const r = await askClaude({ task: 'computer_post', prompt, validate: o => o.status === 'ready' || o.status === 'login_required' || `status ${o.status}: ${o.note || ''}`, ...opts });
   return r.output;
 }
 /** Phase B: click Share and confirm. */

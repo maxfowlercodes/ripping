@@ -70,7 +70,7 @@
     const C = cfg.colors; const W = 1080, H = 1920;
     const overlay = !!spec.overlay;
     const hasAvatar = !!(spec.avatar || cfg.avatar) && !overlay;
-    const avCfg = hasAvatar ? Object.assign({ character: 'founder' }, cfg.avatar || {}, spec.avatar || {}) : null;
+    const avCfg = hasAvatar ? Object.assign({ character: 'orb' }, cfg.avatar || {}, spec.avatar || {}) : null;
     const stage = h('div', { position: 'absolute', inset: 0, transformOrigin: '50% 42%' }, root);
     const bg = h('div', { position: 'absolute', inset: 0, background: overlay ? 'transparent' : C.bg1 }, stage);
     const bgUpdate = overlay ? () => {} : (RK.backgrounds[cfg.bg] || RK.backgrounds.gradient)(bg, cfg, C);

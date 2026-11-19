@@ -39,7 +39,7 @@ async function runJobInner(j) {
       const out = path.join(reelDir(slug), draft ? 'draft.mp4' : 'reel.mp4');
       const r = await renderReel2({ script: sc, style: st, voice: voice || 'auto', lang: lang || m.lang || 'en', music: music || m.music, out, draft: !!draft, avatarFile, workDir: path.join(reelDir(slug), 'work'), onLog: log,
         onProgress: ({ stage, done, total }) => { j.stage = stage; j.progress = +(((stage === 'voice' ? 0 : 0.2) + (done / total) * (stage === 'voice' ? 0.2 : 0.8)).toFixed(2)); writeJson(jf(j.id), j); } });
-      const m2 = getMeta(slug); Object.assign(m2, { durations: r.durations, seconds: r.seconds, style: st, lang: lang || m2.lang || 'en', rendered: new Date().toISOString() }); if (!draft && m2.status !== 'posted' && m2.status !== 'scheduled') m2.status = 'rendered'; saveMeta(slug, m2);
+      const m2 = getMeta(slug); Object.assign(m2, { durations: r.durations, seconds: r.seconds, style: r.style || st, qa: r.qa || undefined, lang: lang || m2.lang || 'en', rendered: new Date().toISOString() }); if (!draft && m2.status !== 'posted' && m2.status !== 'scheduled') m2.status = 'rendered'; saveMeta(slug, m2);
     } else if (j.type === 'browser-test') {
       const { checkInstagram } = await import('./computer.mjs'); const { setBrowserTest } = await import('./setup.mjs'); const r = await checkInstagram({ log }); setBrowserTest({ at: new Date().toISOString(), ...r });
       if (r.loggedIn && r.username) { const { saveBrand } = await import('./brand.mjs'); const u = r.username.replace(/^@/, ''); if (/^[\w.]{1,30}$/.test(u)) saveBrand({ posting: { username: u } }); }

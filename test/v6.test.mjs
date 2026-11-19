@@ -176,3 +176,10 @@ test('library: reels land in honest states and post-run presets skip finished st
   const m = getMeta(slug); m.status = 'posted'; m.postedAt = new Date().toISOString(); saveMeta(slug, m); assert.equal(postLibrary().find(i => i.slug === slug).state, 'posted');
   assert.throws(() => startPostRun(slug), /already posted/);
 });
+
+test('layout QA samples every 2s plus each beat, and no presenter by default', async () => {
+  const { sampleTimes } = await import('../src/layoutqa.mjs'); const t = sampleTimes([{ start: 0 }, { start: 4.4 }], 10);
+  assert.ok([1, 3, 5, 7, 9].every(x => t.includes(x)) && t.includes(0.5) && t.includes(4.9));
+  const { getBrand, saveBrand } = await import('../src/brand.mjs'); assert.notEqual(getBrand().production.avatar, 'founder');
+  saveBrand({ production: { avatar: 'founder' } }); assert.equal(getBrand().production.avatar, 'founder'); // an explicit choice after migration sticks
+});

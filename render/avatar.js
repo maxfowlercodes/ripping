@@ -67,6 +67,17 @@
         bars.forEach((b, i) => { const k = 0.35 + 0.65 * Math.abs(Math.sin(t * 15 + i * 1.9)); const hh2 = 6 + m * 56 * k * (1 - Math.abs(i - 4) / 6); b.setAttribute('height', hh2); b.setAttribute('y', 408 - hh2 / 2); });
       };
     },
+    orb(g, o) { // a calm glowing voice orb: no face, nothing to look awkward. Pulses and ripples with the real audio.
+      const c = o.led || o.body || '#6366f1';
+      const defs = P('defs', {}, g); const gr = P('radialGradient', { id: 'orbg', cx: '38%', cy: '34%', r: '75%' }, defs); P('stop', { offset: '0', 'stop-color': '#ffffff', 'stop-opacity': '.95' }, gr); P('stop', { offset: '.35', 'stop-color': c, 'stop-opacity': '.95' }, gr); P('stop', { offset: '1', 'stop-color': c, 'stop-opacity': '.35' }, gr);
+      const halo = P('circle', { cx: 300, cy: 380, r: 230, fill: c, opacity: .12 }, g); const rings = [0, 1, 2].map(() => P('circle', { cx: 300, cy: 380, r: 200, fill: 'none', stroke: c, 'stroke-width': 4, opacity: 0 }, g));
+      const core = P('circle', { cx: 300, cy: 380, r: 160, fill: 'url(#orbg)' }, g); const bars = [...Array(24)].map((_, i) => { const a = (i / 24) * Math.PI * 2; return { a, el: P('rect', { x: -4, y: -4, width: 8, height: 8, rx: 4, fill: '#fff', opacity: .85 }, g) }; });
+      return (t, m, v, em) => {
+        const sc = 1 + m * 0.16 + em * 0.05 + Math.sin(t * 1.6) * 0.012; core.setAttribute('transform', `translate(300 380) scale(${sc}) translate(-300 -380)`); halo.setAttribute('r', 230 + m * 60); halo.setAttribute('opacity', 0.1 + m * 0.18);
+        rings.forEach((r, i) => { const u = ((t * 0.7 + i / 3) % 1); r.setAttribute('r', 175 + u * 110 * (0.4 + m)); r.setAttribute('opacity', (1 - u) * (0.1 + m * 0.5)); });
+        bars.forEach((b, i) => { const k = 0.3 + 0.7 * Math.abs(Math.sin(t * 9 + i * 1.7)); const len = 8 + m * 70 * k; const rr = 178 * sc + len / 2; b.el.setAttribute('height', len); b.el.setAttribute('transform', `translate(${300 + Math.cos(b.a) * rr} ${380 + Math.sin(b.a) * rr}) rotate(${(b.a * 180) / Math.PI + 90}) translate(-4 ${-len / 2})`); });
+      };
+    },
     blob(g, o) {
       const c = o.body || '#fb923c', d = o.shade || '#ea580c';
       const body = P('g', {}, g); P('ellipse', { cx: 300, cy: 600, rx: 210, ry: 230, fill: d }, body); const face = P('g', {}, g); const bl = P('ellipse', { cx: 300, cy: 330, rx: 200, ry: 190, fill: c }, face);
@@ -86,7 +97,7 @@
   RK.makeAvatar = (layer, avCfg, cfg) => {
     const width = avCfg.width || 860; const k = width / 600; const holder = h('div', { position: 'absolute', left: ((1080 - width) / 2) + 'px', top: (avCfg.top ?? (1920 - 760 * k + 130)) + 'px', width: width + 'px', height: (760 * k) + 'px' }, layer);
     const s = svg('svg', { viewBox: '0 0 600 760', width, height: 760 * k }, holder); s.style.overflow = 'visible';
-    const g = svg('g', {}, s); const draw = (characters[avCfg.character] || characters.founder)(g, Object.assign({ shirt: cfg.colors.accent, shirtShade: cfg.colors.accent2 || cfg.colors.accent, led: cfg.colors.accent, body: cfg.colors.accent }, avCfg));
+    const g = svg('g', {}, s); const draw = (characters[avCfg.character] || characters.orb)(g, Object.assign({ shirt: cfg.colors.accent, shirtShade: cfg.colors.accent2 || cfg.colors.accent, led: cfg.colors.accent, body: cfg.colors.accent }, avCfg));
     return { update(t) { const m = smooth(t, RK.mouthAt(t)); draw(t, m, RK.visemeAt(t), RK.emphAt(t), blinkAt(t)); } };
   };
 })();
