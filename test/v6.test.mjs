@@ -88,7 +88,7 @@ test('browser control: bundled server preferred; npx fallback goes through cmd /
 });
 test('find-references prompt: keywords, search URL, recency, read-only limits', () => {
   assert.match(searchUrl('cv tips & more'), /explore\/search\/keyword\/\?q=cv%20tips%20%26%20more$/);
-  const p = findPrompt({ keywords: ['cv tips', 'job interview'], max: 8 }); for (const x of ['"cv tips"', '"job interview"', 'last 30 days', 'ONCE', 'follower count', 'Do not like, follow, save, comment or message', '40 page actions', 'Open up to 8 reels']) assert.ok(p.includes(x), x);
+  const p = findPrompt({ keywords: ['cv tips', 'job interview'], max: 8 }); for (const x of ['"cv tips"', '"job interview"', 'last 30 days', 'ONCE', 'follower count', 'Do not like, follow, save, comment or message', '90 page actions', 'Open up to 8 reels']) assert.ok(p.includes(x), x);
 });
 test('refs/find and browser/test endpoints validate input and enqueue jobs', async () => {
   const srv = startDashboard({ port: 4318, worker: false }); await new Promise(r => setTimeout(r, 300));
