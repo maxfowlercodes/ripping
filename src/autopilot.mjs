@@ -127,8 +127,10 @@ const FN = { brand: stepBrand, research: stepResearch, refs: stepRefs, idea: ste
 
 export function copyClipboard(text) { try { if (isWin) sh('clip', [], { input: text }); else if (isMac) sh('pbcopy', [], { input: text }); else sh('xclip', ['-selection', 'clipboard'], { input: text }); } catch {} }
 
+const activeRuns = new Set(); // runs executing in THIS process (guards against the worker loop starting the same run twice)
 export async function executeRun(id) {
-  const r = getRun(id); if (!r || ['done', 'failed', 'cancelled'].includes(r.status)) return r; r.status = 'running'; save(r);
+  if (activeRuns.has(id)) return getRun(id);
+  const r = getRun(id); if (!r || ['done', 'failed', 'cancelled'].includes(r.status)) return r; activeRuns.add(id); r.status = 'running'; save(r);
   try {
     for (const s of r.steps) {
       if (s.status === 'done' || s.status === 'skipped') continue;
@@ -143,11 +145,12 @@ export async function executeRun(id) {
       }
     }
     r.status = 'done'; r.finished = new Date().toISOString(); save(r);
-  } catch (e) { r.status = 'failed'; r.error = e.message; const s = r.steps.find(x => x.status === 'running'); if (s) { s.status = 'failed'; s.detail = e.message; } save(r); addInbox({ type: 'error', title: 'Make & Post failed', body: e.message, payload: { runId: r.id } }); }
+  } catch (e) { r.status = 'failed'; r.error = e.message; const s = r.steps.find(x => x.status === 'running'); if (s) { s.status = 'failed'; s.detail = e.message; } save(r); addInbox({ type: 'error', title: 'Make & Post failed', body: e.message, payload: { runId: r.id } }); } finally { activeRuns.delete(id); }
   return getRun(id);
 }
 /** Called by the worker: continue queued/crashed runs and release time-gated ones. */
 export async function pumpRuns() {
+  if (activeRuns.size) return false; // one run at a time per process
   for (const r of listRuns().reverse()) {
     if (r.status === 'waiting' && r.gate?.type === 'time' && new Date(r.gate.until) <= new Date()) { r.status = 'queued'; r.gate = null; save(r); }
     if (r.status === 'queued' || r.status === 'running') { await executeRun(r.id); return true; }

@@ -41,7 +41,7 @@ function buildNav(active, st) {
   const all = NAV.flatMap(([, i]) => i); const label = k => all.find(x => x[0] === k)?.[1];
   $('#tabbar').innerHTML = TABBAR.map(k => `<a href="#${k}" class="${k === active ? 'on' : ''}">${ic(k, 24)}<span>${label(k)}</span></a>`).join('') + `<a href="#" id="moretab" class="${TABBAR.includes(active) ? '' : 'on'}">${ic('more', 24)}<span>More</span></a>`;
   $('#moretab').onclick = e => { e.preventDefault(); ask({ title: 'More', list: all.filter(([k]) => !TABBAR.includes(k)).map(([k, l]) => ({ k, l })) }); };
-  if (st) $('#sidefoot').innerHTML = `<span>Claude mode: <b style="color:var(--text)">${esc(st.mode || 'eco')}</b></span><span>${st.calls || 0} model calls today</span>`;
+  if (st) { const free = st.freeBytes == null ? null : st.freeBytes / 1e9; $('#sidefoot').innerHTML = `<span>Claude mode: <b style="color:var(--text)">${esc(st.mode || 'eco')}</b></span><span>${st.calls || 0} model calls today</span>${free != null && free < 8 ? `<a href="#setup" style="color:${free < 3 ? 'var(--red)' : 'var(--orange)'}">Low disk space: ${free.toFixed(1)} GB free</a>` : ''}`; }
 }
 
 /** Apple-style dialog. ask({title, message, input, placeholder, value, confirm, cancel, danger, list}) -> string | true | null */
@@ -64,10 +64,46 @@ const segHtml = (id, options, value) => `<div class="seg" id="${id}">${options.m
 function bindSeg(id, onChange) { const h = document.getElementById(id); h.querySelectorAll('button').forEach(b => (b.onclick = () => { h.querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b)); onChange(b.dataset.v); })); }
 
 /** Claude searches Instagram (in the Reelkit browser) for reels beating their account's usual reach. Resolves with {ok, text}. */
+const JOBNAME = { research: 'the research', autofill: 'reading your website', install: 'an install', 'browser-test': 'the browser test', 'find-refs': 'another search', post: 'a post', analyze: 'analytics', render: 'a render' };
+const jobLine = j => (j.status === 'queued' ? (j.queue?.waitingOn ? `Waiting for ${JOBNAME[j.queue.waitingOn.type] || 'another task'} to finish…` : 'Starting…') : (j.log || []).slice(-1)[0] || 'Starting…');
 async function findRefsFlow(keywords, { autoSave = 0, onTick } = {}) {
   const ig = await api('/setup/ig'); if (!ig.loggedIn) return { ok: false, text: ig.browser ? 'Log in to Instagram in the Reelkit browser first.' : 'Open the Reelkit browser and log in to Instagram first (Settings, or the Posting step).' };
   const job = await api('/refs/find', { keywords, max: 10, autoSave });
   return new Promise(done => { let busy = false; const t = setInterval(async () => { if (busy) return; busy = true; let j = null; try { j = await api('/job/' + job.id); } catch {} busy = false; if (!j) return; onTick && onTick(j);
-    if (j.status === 'done') { clearInterval(t); done({ ok: true, text: (j.log || []).slice(-1)[0] || 'Done' }); } else if (j.status === 'failed') { clearInterval(t); done({ ok: false, text: j.error || 'Failed' }); } }, 2000); S.timers.push(t); });
+    if (j.status === 'done') { clearInterval(t); const r = j.result; done({ ok: !!r?.added, text: r ? (r.added ? `Added ${r.added} reel${r.added > 1 ? 's' : ''}${r.saved ? `, saved the top ${r.saved}` : ''}${r.estimated ? `. ${r.estimated} had no visible view count, so their views are estimated from likes` : ''}` : 'Claude found no reels it could use' + (r.note ? '. ' + r.note : '')) : (j.log || []).slice(-1)[0] || 'Done' }); } else if (j.status === 'failed') { clearInterval(t); done({ ok: false, text: j.error || 'Failed' }); } }, 2000); S.timers.push(t); });
 }
 async function suggestKeywords() { const { brand: b } = await api('/brand'); let tags = []; try { const r = await api('/research'); tags = (r.research?.data?.competitors?.hashtags || []).map(h => h.replace(/^#/, '')); } catch {} return [...new Set([b.niche, ...tags].map(x => (x || '').trim()).filter(Boolean))].slice(0, 3).join(', '); }
+
+/** Global "Running tasks" box (top left): every background task, live, with the model in use and a Cancel button. */
+const TaskTray = (() => {
+  let timer = null, lastKey = '', tasks = []; const open = new Set(), dismissed = new Set();
+  const host = () => document.getElementById('tasks');
+  const el = (t, n) => (t.status === 'queued' ? ic('clock', 18) : t.status === 'running' ? '<span class="spinner"></span>' : t.status === 'waiting' ? ic('bell', 18) : t.status === 'done' ? ic('check', 18) : t.status === 'failed' ? ic('x', 18) : ic('x', 16));
+  const mmss2 = ms => { const s = Math.max(0, Math.floor(ms / 1000)); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); };
+  const waitText = t => { const w = t.queue?.waitingOn; const N = { research: 'the research', autofill: 'reading your website', install: 'an install', 'browser-test': 'the browser test', 'find-refs': 'another search', post: 'a post', analyze: 'analytics' }; return w ? `Waiting for ${N[w.type] || 'another task'} to finish` : 'Starting…'; };
+  const line = t => (t.status === 'queued' ? waitText(t) : t.status === 'waiting' ? (t.waiting || 'Needs you') : t.status === 'done' ? 'Finished' : t.status === 'cancelled' ? 'Cancelled' : t.status === 'failed' ? 'Stopped' : (t.cancelling ? 'Cancelling…' : t.line || 'Working…'));
+  function render() {
+    const h = host(); if (!h) return; const list = tasks.filter(t => !dismissed.has(t.id)); const key = JSON.stringify(list.map(t => [t.id, t.status, t.line, t.model, t.attempts, t.cancelling, Math.round((t.progress || 0) * 20), open.has(t.id), t.error]));
+    if (key === lastKey) return; lastKey = key;
+    h.innerHTML = list.map(t => `<div class="tk ${t.status}" data-id="${esc(t.id)}" data-kind="${t.kind}"><div class="tr"><span class="ico">${el(t)}</span><div class="grow" style="min-width:0"><b>${esc(t.title)}</b><div class="tl1">${esc(line(t))}</div></div>
+      ${t.cancellable ? `<button class="btn-i alt" data-act="cancel" aria-label="Cancel">${ic('x', 15)}</button>` : ['done', 'failed', 'cancelled'].includes(t.status) ? `<button class="btn-i alt" data-act="dismiss" aria-label="Dismiss">${ic('x', 15)}</button>` : ''}
+      ${t.lines?.length ? `<button class="btn-i alt" data-act="more" aria-label="Details" style="transform:rotate(${open.has(t.id) ? 90 : 0}deg)">${ic('chevron', 15)}</button>` : ''}</div>
+      ${['running', 'queued'].includes(t.status) ? `<div class="meta">${t.model ? `<span class="chip">${esc(t.model)}${t.attempts > 1 ? ' · try ' + t.attempts : ''}</span>` : ''}<span class="tk-time" data-s="${esc(t.started || '')}"></span></div>` : ''}
+      ${t.progress > 0 && t.status === 'running' ? `<div class="bar"><i style="width:${Math.round(t.progress * 100)}%"></i></div>` : ''}
+      ${t.error ? `<div class="err">${esc(String(t.error).slice(0, 220))}</div>` : ''}
+      ${open.has(t.id) ? `<div class="logbox">${esc(t.lines.join('\n'))}</div>` : ''}</div>`).join('');
+    h.querySelectorAll('.tk').forEach(card => { const id = card.dataset.id, kind = card.dataset.kind;
+      card.querySelectorAll('[data-act]').forEach(b => (b.onclick = async () => { const a = b.dataset.act;
+        if (a === 'more') { open.has(id) ? open.delete(id) : open.add(id); lastKey = ''; render(); }
+        else if (a === 'dismiss') { dismissed.add(id); lastKey = ''; render(); }
+        else if (a === 'cancel') { b.disabled = true; try { await api(kind === 'run' ? '/run/cancel' : '/jobs/cancel', { id }); } catch (e) { toast(e.message); } tick(true); } })); });
+    tickTimes();
+  }
+  const tickTimes = () => document.querySelectorAll('.tk-time').forEach(e => { const s = Date.parse(e.dataset.s); e.textContent = s ? mmss2(Date.now() - s) : ''; });
+  async function tick(now) {
+    clearTimeout(timer); let busy = false;
+    if (!document.hidden || now) { try { const r = await fetch('/api/tasks').then(x => x.json()); tasks = r.tasks || []; render(); busy = tasks.some(t => ['queued', 'running', 'waiting'].includes(t.status)); } catch {} }
+    timer = setTimeout(tick, busy ? 1500 : 5000);
+  }
+  return { start() { tick(true); setInterval(tickTimes, 1000); document.addEventListener('visibilitychange', () => !document.hidden && tick(true)); }, refresh: () => tick(true) };
+})();

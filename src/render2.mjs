@@ -9,6 +9,7 @@ import { run, ensureDir, probeDuration, home } from './util.mjs';
 import { synth, detectProvider, RTL, voiceCatalog } from './voice.mjs';
 import { transcribe, alignTokens, whisperAvailable } from './transcribe.mjs';
 import { writeSfx, eventsFor } from './sfx.mjs';
+import { assertDisk } from './storage.mjs';
 
 const sha = x => crypto.createHash('sha1').update(typeof x === 'string' ? x : JSON.stringify(x)).digest('hex').slice(0, 14);
 export const customStyleFiles = () => {
@@ -60,7 +61,7 @@ function encodeSegment(frames, fps, out) {
 const FALLBACKS = ['kokoro', 'piper', 'edge', 'sapi', 'say', 'espeak'];
 const est = t => Math.max(1.2, t.split(/\s+/).length / 2.6);
 export async function renderReel2({ script, style, voice = 'auto', lang = 'en', music, out, fps = 30, draft = false, avatarFile, avatar, brandColors, sync, voiceId, sfx, workDir, onLog = console.log, onProgress = () => {} }) {
-  ensureDir(workDir);
+  ensureDir(workDir); assertDisk(1.5e9, workDir);
   const provider = detectProvider(voice); const dead = new Set();
   const syncWhisper = sync !== false && whisperAvailable();
   const beatsText = script.beats; const n = beatsText.length;

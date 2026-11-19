@@ -21,7 +21,7 @@ export function addItem(it) {
   const d = load(); const id = it.id || crypto.createHash('sha1').update(it.url || it.caption || String(Math.random())).digest('hex').slice(0, 10);
   const base = it.baseline || it.followers || it.creatorMedian || 0;
   const rec = { id, url: it.url || '', creator: it.creator || '', caption: it.caption || '', views: Number(it.views) || 0, likes: Number(it.likes) || 0, comments: Number(it.comments) || 0,
-    followers: Number(it.followers) || 0, thumb: it.thumb || '', niche: it.niche || 'general', note: it.note || '', source: it.source || 'manual', status: 'new', added: new Date().toISOString() };
+    followers: Number(it.followers) || 0, thumb: it.thumb || '', niche: it.niche || 'general', note: it.note || '', source: it.source || 'manual', est: !!it.est, status: 'new', added: new Date().toISOString() };
   rec.multiplier = base ? +(rec.views / base).toFixed(1) : 0;
   const i = d.items.findIndex(x => x.id === id); if (i >= 0) { rec.status = d.items[i].status; d.items[i] = rec; } else d.items.push(rec);
   save(d); return rec;
@@ -63,4 +63,24 @@ export function addFromText(text, niche = 'general') {
     decide(rec.id, 'saved'); n++;
   }
   return n;
+}
+
+/** Turn what Claude read off Instagram into Swipe items. If views are not shown (common on search grids), likes x20 is used as a
+ *  clearly-marked estimate instead of discarding the reel. Returns {items, skipped, estimated}. */
+export function normalizeFound(reels, { niche = 'general', source = 'search' } = {}) {
+  const num = x => (Number.isFinite(Number(x)) ? Math.max(0, Number(x)) : 0); const seen = new Set(); const rows = []; let skipped = 0;
+  for (const x of reels || []) { const url = String(x?.url || '').trim(); if (!/^https?:\/\//i.test(url) || seen.has(url)) { skipped++; continue; } seen.add(url); rows.push({ x, url }); }
+  const real = rows.map(r => num(r.x.views)).filter(v => v > 0).sort((a, b) => a - b); const med = real.length ? real[Math.floor(real.length / 2)] : 0; let estimated = 0;
+  const items = rows.map(({ x, url }) => { let views = num(x.views); let est = false; if (!views && num(x.likes)) { views = num(x.likes) * 20; est = true; estimated++; }
+    return { url, creator: String(x.creator || '').replace(/^@/, ''), views, likes: num(x.likes), comments: num(x.comments), caption: String(x.caption || '').slice(0, 400), followers: num(x.followers), baseline: num(x.followers) || med, niche, source, est }; });
+  return { items, skipped, estimated };
+}
+
+/** Save what Claude found. Throws with Claude's own explanation when nothing usable came back, so the app never claims success on 0. */
+export function applyFound(out, { niche = 'general', autoSave = 0 } = {}) {
+  const { items, skipped, estimated } = normalizeFound(out?.reels, { niche }); const note = String(out?.note || '').replace(/\s+/g, ' ').slice(0, 600);
+  const added = items.map(x => addItem(x)); const top = added.slice().sort((a, b) => b.multiplier - a.multiplier).slice(0, Math.max(0, autoSave)); top.forEach(x => decide(x.id, 'saved'));
+  const result = { found: (out?.reels || []).length, added: added.length, saved: top.length, estimated, skipped, note };
+  if (!added.length) { const e = new Error('Claude searched Instagram but found no reels it could use.' + (note ? ' Its explanation: ' + note : ' It gave no reason; watch the Running tasks box next time to see what it opened.')); e.result = result; throw e; }
+  return result;
 }

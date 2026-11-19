@@ -6,7 +6,7 @@ import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { listReels, getMeta, saveMeta, createReel, reelDir, scriptPath } from './store.mjs';
 import { parseScript, lint, virality } from './script.mjs';
-import { listJobs, getJob, enqueue, startWorker } from './jobs.mjs';
+import { listJobs, getJob, enqueue, startWorker, queueInfo, activeTasks, cancelJob } from './jobs.mjs';
 import { enableProbeMode, refreshProbes } from './probes.mjs';
 import { summary, calibrate } from './analytics.mjs';
 import { listSwipe, addItem, decide, discover, fmtViews } from './swipe.mjs';
@@ -28,6 +28,7 @@ import { getLeads, leadsCsv, statusFile } from './chat.mjs';
 import { loadCatalog } from './stylecatalog.mjs';
 import { systemCheck, INSTALLERS, openClaudeLogin, igStatus, getOnboarding, setOnboarding, getAutofill, getBrowserTest } from './setup.mjs';
 import { getResearch } from './research.mjs';
+import { storageReport, cleanStorage, freeBytes } from './storage.mjs';
 import { voiceCatalog, synth } from './voice.mjs';
 import { browserAvailable, findBrowser } from './browser.mjs';
 
@@ -69,7 +70,7 @@ export function startDashboard({ port = 4177, lan = false, worker = true, open =
       if (p === '/api/shutdown' && req.method === 'POST') { send(res, 200, { ok: true }); setTimeout(() => { stop(); process.exit(0); }, 150); return; }
       if (p === '/api/state') {
         if (!stylesCache) { try { const cat = loadCatalog(); stylesCache = Object.keys(cat).length ? Object.values(cat).map(c => ({ name: c.name, desc: c.desc, tags: c.tags, presenter: c.presenter })) : await styleList(); } catch { stylesCache = []; } }
-        return send(res, 200, { onboarding: getOnboarding(), mode: getSettings().mode, calls: usageToday().calls, reels: listReels(), styles: stylesCache, accounts: listAccounts(), jobs: listJobs(12), provider: detectProvider('auto'),
+        return send(res, 200, { onboarding: getOnboarding(), mode: getSettings().mode, calls: usageToday().calls, freeBytes: freeBytes(), reels: listReels(), styles: stylesCache, accounts: listAccounts(), jobs: listJobs(12), provider: detectProvider('auto'),
           health: { ffmpeg: has('ffmpeg'), browser: browserAvailable() && !!findBrowser(), font: !!findFont(), instagram: listAccounts().length > 0, elevenlabs: !!process.env.ELEVENLABS_API_KEY, heygen: !!process.env.HEYGEN_API_KEY } });
       }
       if (p === '/api/reel' && req.method === 'POST') { const s = createReel(body.title || 'Untitled', body.text || `# ${body.title || 'Untitled'}\nYour hook here.\n`); return send(res, 200, { slug: s }); }
@@ -107,7 +108,11 @@ export function startDashboard({ port = 4177, lan = false, worker = true, open =
       }
       if (p === '/api/guide/confirm' && req.method === 'POST') { const f = path.join(home(), 'state.json'); const d = readJson(f, {}); if (['igLoginConfirmed', 'voiceChecked'].includes(body.id)) d[body.id] = true; writeJson(f, d); return send(res, 200, { ok: true }); }
 
-      if ((m = p.match(/^\/api\/job\/([a-f0-9]{8})$/))) { const j = getJob(m[1]); return send(res, j ? 200 : 404, j || { error: 'no such job' }); }
+      if ((m = p.match(/^\/api\/job\/([a-f0-9]{8})$/))) { const j = getJob(m[1]); return send(res, j ? 200 : 404, j ? { ...j, queue: queueInfo(j) } : { error: 'no such job' }); }
+      if (p === '/api/tasks') return send(res, 200, { tasks: activeTasks(), mode: getSettings().mode });
+      if (p === '/api/jobs/cancel' && req.method === 'POST') { if (!/^[a-f0-9]{8}$/.test(String(body.id))) return send(res, 400, { error: 'bad id' }); return send(res, 200, cancelJob(String(body.id)) || { error: 'no such job' }); }
+      if (p === '/api/storage') return send(res, 200, await storageReport());
+      if (p === '/api/storage/clean' && req.method === 'POST') return send(res, 200, await cleanStorage(Array.isArray(body.ids) ? body.ids.map(String) : []));
       if (p === '/api/setup/check') return send(res, 200, { rows: await systemCheck() });
       if (p === '/api/setup/install' && req.method === 'POST') { if (typeof body.id !== 'string' || !Object.hasOwn(INSTALLERS, body.id)) return send(res, 400, { error: 'unknown installer' }); return send(res, 200, enqueue('install', { id: body.id })); }
       if (p === '/api/setup/claude-login' && req.method === 'POST') { openClaudeLogin(); return send(res, 200, { ok: true }); }
@@ -173,7 +178,7 @@ export function startDashboard({ port = 4177, lan = false, worker = true, open =
       if (p === '/api/schedule' && req.method === 'POST') { const mt = getMeta(body.slug); if (!mt) return send(res, 404, {}); Object.assign(mt, { status: 'scheduled', scheduledAt: new Date(body.at).toISOString(), caption: body.caption ?? mt.caption ?? mt.title, account: body.account || mt.account, trial: !!body.trial }); saveMeta(body.slug, mt); return send(res, 200, mt); }
       if (p === '/api/unschedule' && req.method === 'POST') { const mt = getMeta(body.slug); if (mt) { mt.status = 'rendered'; delete mt.scheduledAt; saveMeta(body.slug, mt); } return send(res, 200, {}); }
       if (p === '/api/post-now' && req.method === 'POST') { const mt = getMeta(body.slug); Object.assign(mt, { caption: body.caption ?? mt.caption ?? mt.title, account: body.account || mt.account, trial: !!body.trial }); saveMeta(body.slug, mt); return send(res, 200, enqueue('post', { slug: body.slug })); }
-      if (p === '/api/swipe') return send(res, 200, { items: listSwipe({ status: u.searchParams.get('status') || undefined, niche: u.searchParams.get('niche') || undefined }).map(i => ({ ...i, viewsLabel: fmtViews(i.views) })) });
+      if (p === '/api/swipe') return send(res, 200, { items: listSwipe({ status: u.searchParams.get('status') || undefined, niche: u.searchParams.get('niche') || undefined }).map(i => ({ ...i, viewsLabel: (i.est ? '~' : '') + fmtViews(i.views) })) });
       if (p === '/api/swipe/paste' && req.method === 'POST') { const n = addFromText(String(body.text || '').slice(0, 20000), getBrand().niche || 'general'); return send(res, 200, { added: n, total: referenceCount() }); }
       if (p === '/api/swipe/add' && req.method === 'POST') return send(res, 200, addItem(body));
       if (p === '/api/swipe/decide' && req.method === 'POST') return send(res, 200, decide(body.id, body.status));

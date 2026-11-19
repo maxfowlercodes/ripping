@@ -80,9 +80,11 @@ test('reelkit stop shuts the app and its worker down, and no worker is left behi
 });
 
 const { mcpConfig, findPrompt, searchUrl } = await import('../src/computer.mjs');
-test('Windows launches the browser-control server through cmd /c npx; other platforms use npx directly', () => {
-  const w = mcpConfig('win32').mcpServers.playwright; assert.equal(w.command, 'cmd'); assert.deepEqual(w.args.slice(0, 3), ['/c', 'npx', '-y']); assert.ok(w.args.some(a => a.startsWith('--cdp-endpoint')) || w.args.includes('--cdp-endpoint'));
-  const l = mcpConfig('linux').mcpServers.playwright; assert.equal(l.command, 'npx'); assert.equal(l.args[0], '-y');
+test('browser control: bundled server preferred; npx fallback goes through cmd /c on Windows', () => {
+  const l = mcpConfig('win32', '/x/node_modules/@playwright/mcp/cli.js').mcpServers.playwright; assert.equal(l.command, 'node'); assert.equal(l.args[0], '/x/node_modules/@playwright/mcp/cli.js'); assert.ok(l.args.includes('--cdp-endpoint'));
+  const w = mcpConfig('win32', null).mcpServers.playwright; assert.equal(w.command, 'cmd'); assert.deepEqual(w.args.slice(0, 3), ['/c', 'npx', '-y']);
+  const u = mcpConfig('linux', null).mcpServers.playwright; assert.equal(u.command, 'npx'); assert.equal(u.args[0], '-y');
+  assert.ok(mcpConfig().mcpServers.playwright.command === 'node', 'this repo bundles @playwright/mcp');
 });
 test('find-references prompt: keywords, search URL, recency, read-only limits', () => {
   assert.match(searchUrl('cv tips & more'), /explore\/search\/keyword\/\?q=cv%20tips%20%26%20more$/);
@@ -108,4 +110,58 @@ test('login detection does not change the page colour scheme (no light/dark flic
     for (let i = 0; i < 8; i++) { const c = await browserCookies(port); assert.ok(Array.isArray(c)); seen.add(await scheme()); }
     assert.deepEqual([...seen], ['dark'], 'colour scheme stayed dark during repeated login checks');
   } finally { chrome.kill(); site.close(); delete process.env.REELKIT_CDP_PORT; }
+});
+
+const { describeTool, buildArgs, DENY_BROWSER } = await import('../src/claude.mjs'); const { ALLOWED } = await import('../src/computer.mjs');
+test('browser tasks: explicit safe tool allowlist, code execution denied, progress streamed', () => {
+  assert.ok(ALLOWED.length >= 8 && ALLOWED.every(t => t.startsWith('mcp__playwright__browser_'))); for (const bad of ['run_code', 'evaluate', 'network', 'console']) assert.ok(!ALLOWED.some(t => t.includes(bad)), bad);
+  assert.ok(DENY_BROWSER.includes('mcp__playwright__browser_run_code_unsafe') && DENY_BROWSER.includes('mcp__playwright__browser_evaluate'));
+  const a = buildArgs({ task: 'computer_research', prompt: 'x', model: 'haiku', mcpConfig: { mcpServers: {} }, allowedTools: ALLOWED, stream: true });
+  assert.deepEqual(a.slice(a.indexOf('--output-format'), a.indexOf('--output-format') + 3), ['--output-format', 'stream-json', '--verbose']); assert.ok(a.includes('--disallowedTools') && a.includes('mcp__playwright__browser_run_code_unsafe'));
+  const t = buildArgs({ task: 'caption_hashtags', prompt: 'x', model: 'haiku' }); assert.equal(t[t.indexOf('--output-format') + 1], 'json');
+});
+test('progress lines are readable', () => {
+  assert.equal(describeTool('mcp__playwright__browser_navigate', { url: 'https://www.instagram.com/explore/search/keyword/?q=cv%20tips' }), 'Opening www.instagram.com/explore/search/keyword/?q=cv%20tips'); assert.equal(describeTool('mcp__playwright__browser_snapshot'), 'Reading the page');
+  assert.equal(describeTool('mcp__playwright__browser_click', { element: 'Reels tab' }), 'Clicking Reels tab'); assert.match(describeTool('WebSearch', { query: 'cv tips' }), /Searching the web: cv tips/);
+});
+
+const { laneOf, queueInfo } = await import('../src/jobs.mjs');
+test('job lanes: research never blocks browser work; a queued job reports what it is waiting for', async () => {
+  assert.notEqual(laneOf('research'), laneOf('find-refs')); assert.equal(laneOf('find-refs'), laneOf('browser-test')); assert.equal(laneOf('install'), 'install');
+  const fsx = await import('node:fs'); const jdir = path.join(process.env.REELKIT_HOME, 'jobs'); fsx.mkdirSync(jdir, { recursive: true });
+  const mk = (id, type, status, created) => fsx.writeFileSync(path.join(jdir, id + '.json'), JSON.stringify({ id, type, status, created, log: [], payload: {}, stage: 'Working' }));
+  mk('aaaaaaa1', 'find-refs', 'running', '2026-01-01T00:00:00Z'); mk('aaaaaaa2', 'browser-test', 'queued', '2026-01-01T00:01:00Z'); mk('aaaaaaa3', 'research', 'running', '2026-01-01T00:00:30Z');
+  const q = queueInfo(getJob('aaaaaaa2')); assert.equal(q.ahead, 1); assert.equal(q.waitingOn.type, 'find-refs'); assert.equal(queueInfo(getJob('aaaaaaa1')), null);
+  const lone = (() => { mk('aaaaaaa4', 'install', 'queued', '2026-01-01T00:02:00Z'); return queueInfo(getJob('aaaaaaa4')); })(); assert.equal(lone.ahead, 0); assert.equal(lone.waitingOn, null);
+});
+
+const { storageReport, cleanStorage, freeBytes, assertDisk } = await import('../src/storage.mjs');
+test('storage: reports sizes, cleans only regenerable caches, never videos or the login profile', async () => {
+  const fsx = await import('node:fs'); const h = process.env.REELKIT_HOME; const w = path.join(h, 'reels', 'r1', 'work'); fsx.mkdirSync(w, { recursive: true }); fsx.writeFileSync(path.join(w, 'seg.mp4'), Buffer.alloc(200000));
+  fsx.writeFileSync(path.join(h, 'reels', 'r1', 'reel.mp4'), Buffer.alloc(150000)); fsx.mkdirSync(path.join(h, 'browser-profile', 'Default', 'Cache'), { recursive: true }); fsx.writeFileSync(path.join(h, 'browser-profile', 'Default', 'Cache', 'c1'), Buffer.alloc(120000)); fsx.writeFileSync(path.join(h, 'browser-profile', 'Default', 'Cookies'), Buffer.alloc(5000));
+  const r = await storageReport(); const by = Object.fromEntries(r.items.map(i => [i.id, i])); assert.ok(by.work.bytes >= 200000 && by.work.clean); assert.ok(by.videos.bytes >= 150000 && !by.videos.clean); assert.ok(by.profile.bytes >= 125000 && !by.profile.clean); assert.ok(typeof r.free === 'number' && r.free > 0);
+  const out = await cleanStorage(['work', 'videos', 'profile', 'browsercache']); assert.deepEqual(out.cleaned.sort(), ['browsercache', 'work']); assert.ok(out.freed >= 300000);
+  assert.ok(!fsx.existsSync(w) && fsx.existsSync(path.join(h, 'reels', 'r1', 'reel.mp4')) && fsx.existsSync(path.join(h, 'browser-profile', 'Default', 'Cookies')) && !fsx.existsSync(path.join(h, 'browser-profile', 'Default', 'Cache')), 'only caches removed; login cookies and videos kept');
+  assert.throws(() => assertDisk(1e18), /Low disk space/); assert.doesNotThrow(() => assertDisk(1000));
+});
+
+const { normalizeFound } = await import('../src/swipe.mjs');
+test('found reels are never silently dropped: missing views fall back to a marked likes estimate', () => {
+  const r = normalizeFound([
+    { url: 'https://www.instagram.com/reel/a/', creator: '@coach', views: 412000, likes: 18000, comments: 640, caption: 'hook', followers: 58000 },
+    { url: 'https://www.instagram.com/reel/b/', creator: 'hr', views: 0, likes: 4100, comments: 12, caption: 'second', followers: 0 },
+    { url: 'https://www.instagram.com/reel/c/', creator: 'x', views: 0, likes: 0, comments: 0, caption: 'third' },
+    { url: 'https://www.instagram.com/reel/a/', creator: '@coach', views: 1 }, { url: 'not a url', creator: 'bad' }, { creator: 'nourl' },
+  ]);
+  assert.equal(r.items.length, 3); assert.equal(r.skipped, 3); assert.equal(r.estimated, 1);
+  const [a, b, c] = r.items; assert.equal(a.views, 412000); assert.equal(a.creator, 'coach'); assert.equal(a.est, false); assert.equal(b.views, 82000); assert.equal(b.est, true); assert.equal(b.baseline, 412000, 'baseline falls back to the median of real views'); assert.equal(c.views, 0);
+  assert.deepEqual(normalizeFound([]).items, []); assert.deepEqual(normalizeFound(null).items, []);
+});
+
+const { applyFound } = await import('../src/swipe.mjs');
+test('"found nothing" is reported with Claude\'s explanation, never as success; real finds are saved', () => {
+  assert.throws(() => applyFound({ reels: [], note: 'I saw the Instagram login page, so I could not search.' }), e => /no reels it could use/.test(e.message) && /login page/.test(e.message) && e.result.added === 0);
+  assert.throws(() => applyFound({ reels: [{ creator: 'x' }] }), /no reels it could use/); assert.throws(() => applyFound(undefined), /no reels it could use/);
+  const ok = applyFound({ reels: [{ url: 'https://www.instagram.com/reel/q1/', creator: 'a', views: 900000, likes: 40000, caption: 'c', followers: 50000 }, { url: 'https://www.instagram.com/reel/q2/', creator: 'b', views: 0, likes: 2000, caption: 'd' }], note: 'ok' }, { niche: 'jobs', autoSave: 1 });
+  assert.equal(ok.added, 2); assert.equal(ok.saved, 1); assert.equal(ok.estimated, 1);
 });

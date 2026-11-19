@@ -6,7 +6,7 @@ import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
-import { findBrowser } from './browser.mjs';
+import { findBrowser, rootDir } from './browser.mjs';
 import { home, ensureDir } from './util.mjs';
 import { askClaude, getSettings } from './claude.mjs';
 
@@ -25,9 +25,17 @@ export async function ensureBrowser(url = IG_URL() + '/') {
   throw new Error('Browser did not open its debugging port.');
 }
 
-// On native Windows npx is a .cmd shim, so it must be started through cmd /c (Claude Code's own docs say the same).
-export const mcpConfig = (platform = process.platform) => { const a = ['-y', '@playwright/mcp@latest', '--cdp-endpoint', `http://127.0.0.1:${CDP_PORT}`]; return { mcpServers: { playwright: platform === 'win32' ? { command: 'cmd', args: ['/c', 'npx', ...a] } : { command: 'npx', args: a } } }; };
-export const ALLOWED = ['mcp__playwright'];
+// Browser control: the Playwright MCP server ships inside Reelkit (node_modules), so there is no download at the moment of use.
+// Fallback to npx (on native Windows npx is a .cmd shim, so it must go through cmd /c).
+const localMcp = () => { const p = path.join(rootDir, 'node_modules', '@playwright', 'mcp', 'cli.js'); return fs.existsSync(p) ? p : null; };
+export const mcpConfig = (platform = process.platform, local = localMcp()) => {
+  const cdp = ['--cdp-endpoint', `http://127.0.0.1:${CDP_PORT}`];
+  if (local) return { mcpServers: { playwright: { command: 'node', args: [local, ...cdp] } } };
+  const a = ['-y', '@playwright/mcp@latest', ...cdp]; return { mcpServers: { playwright: platform === 'win32' ? { command: 'cmd', args: ['/c', 'npx', ...a] } : { command: 'npx', args: a } } };
+};
+// Explicit allowlist: what browsing and posting need. Code execution and network inspection are NOT allowed, because page content
+// (captions, bios) is untrusted and could try to steer Claude.
+export const ALLOWED = ['navigate', 'navigate_back', 'snapshot', 'click', 'type', 'fill_form', 'press_key', 'wait_for', 'take_screenshot', 'file_upload', 'hover', 'select_option', 'handle_dialog', 'tabs', 'mouse_wheel', 'resize'].map(t => 'mcp__playwright__browser_' + t);
 
 export const SAFETY = () => `You are operating the user's OWN Instagram account in a dedicated browser window that is already open and logged in. You may only: navigate within ${new URL(IG_URL()).host}, use the web post composer to create the one reel described, and read analytics pages. You must NOT: follow/unfollow, like, comment, send messages, edit the profile or settings, change passwords/2FA, open any other website, or type credentials. If you see a login page, checkpoint, captcha, "suspicious activity" notice or any unexpected dialog, STOP and report it instead of continuing. Work efficiently: prefer accessibility snapshots over screenshots, never repeat a failed action more than twice.`;
 
@@ -86,7 +94,7 @@ export function findPrompt({ keywords, max }) {
 Keywords: ${keywords.map(k => `"${k}"`).join(', ')}.
 For each keyword open ${searchUrl('<keyword>')} (replace <keyword>, URL-encoded). If that page shows no results, use the Search item in the left menu, type the keyword, and look at the Reels results. Look only at Reels from roughly the last 30 days. Scroll at most 2 screens per keyword, at a human pace.
 From the grids, pick the reels with the highest view counts. Open up to ${max} reels in total (spread across keywords) and read: the exact reel URL, the creator @handle, views, likes, comments, the first 200 characters of the caption, and how long ago it was posted. For each distinct creator, open their profile ONCE and read the follower count (needed to judge whether the reel beat their usual reach).
-Stay under 40 page actions in total. Do not like, follow, save, comment or message anything. Return JSON {reels:[{url,creator,views,likes,comments,caption,followers,postedAgo}], note}. Convert counts like "1.2M" or "58K" to plain numbers. If you cannot see a number, use 0 and say so in note.`;
+Stay under 40 page actions in total. Do not like, follow, save, comment or message anything. Return JSON {reels:[{url,creator,views,likes,comments,caption,followers,postedAgo}], note}. Convert counts like "1.2M" or "58K" to plain numbers. If a reel's view count is not shown anywhere, return views as 0 but make sure likes and comments are filled in. If you cannot find any reels, return an empty list and explain exactly what you saw (login page, no results, a blocked page) in note.`;
 }
 /** Claude searches Instagram for you: keyword -> top recent reels -> outlier candidates for the Swipe feed. */
 export async function findReels({ keywords, max = 10, log } = {}) {
