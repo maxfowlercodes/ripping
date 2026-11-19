@@ -52,3 +52,15 @@
 | Business chat with lead capture, FAQ grounding, rate limits, own budget | ✅ real conversation + browser test · 🟡 public tunnel untested |
 | Leads tab (status, transcript, CSV, delete) | ✅ |
 | In-app Guide with self-ticking checklist + docs/GUIDE.md | ✅ |
+
+
+## v0.5 additions
+| Capability | Status |
+|---|---|
+| Setup wizard (10 steps, resumable) with computer check, whitelisted one-click installers, Claude sign-in/test, spend mode | ✅ rendered and clicked through in a browser; installers' *whitelist* and API tested · 🟡 actual installs not run here (they hit the network/pip/winget) |
+| Autofill business details from your website | ✅ real run (one haiku web call) |
+| Instagram login auto-detection (session cookie in the Reelkit browser) | ✅ tested with real headless Chrome · 🟡 not against real Instagram |
+| Apple-style redesign (sidebar, tab bar, switches, segmented controls, dialogs, light/dark, custom icons) | ✅ screenshotted light, dark, mobile |
+| Keynote-style video templates (dark, light, graphite) | ✅ |
+| In-app API key fields (ElevenLabs, HeyGen) saved to a private 0600 file, never returned | ✅ |
+| Start-with-Windows (scheduled task) from the wizard | 🟡 untested (no Windows machine) |

@@ -1161,5 +1161,80 @@
   "transition": "flash",
   "presenter": false,
   "glass": false
+ },
+ "keynote-dark": {
+  "name": "keynote-dark",
+  "desc": "Pure black, large confident type, one blue-to-violet accent",
+  "tags": {
+   "mood": [
+    "minimal",
+    "luxury",
+    "calm"
+   ],
+   "niches": [
+    "saas",
+    "luxury",
+    "agency",
+    "ai",
+    "creator"
+   ],
+   "energy": 1,
+   "tone": "dark"
+  },
+  "bg": "flat",
+  "captionMode": "words",
+  "key": "gradient",
+  "transition": "none",
+  "presenter": false,
+  "glass": false
+ },
+ "keynote-light": {
+  "name": "keynote-light",
+  "desc": "Soft white, large type, calm blue accent",
+  "tags": {
+   "mood": [
+    "minimal",
+    "calm",
+    "friendly"
+   ],
+   "niches": [
+    "saas",
+    "education",
+    "coaching",
+    "ai"
+   ],
+   "energy": 1,
+   "tone": "light"
+  },
+  "bg": "flat",
+  "captionMode": "words",
+  "key": "gradient",
+  "transition": "none",
+  "presenter": false,
+  "glass": false
+ },
+ "keynote-graphite": {
+  "name": "keynote-graphite",
+  "desc": "Graphite grey with a warm accent, premium and quiet",
+  "tags": {
+   "mood": [
+    "luxury",
+    "calm",
+    "dramatic"
+   ],
+   "niches": [
+    "luxury",
+    "saas",
+    "agency"
+   ],
+   "energy": 2,
+   "tone": "dark"
+  },
+  "bg": "rim",
+  "captionMode": "words",
+  "key": "gradient",
+  "transition": "zoom",
+  "presenter": false,
+  "glass": false
  }
 }

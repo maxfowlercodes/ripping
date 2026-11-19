@@ -9,7 +9,7 @@ import { parseScript, lint, virality } from './script.mjs';
 import { listJobs, enqueue, startWorker } from './jobs.mjs';
 import { summary, calibrate } from './analytics.mjs';
 import { listSwipe, addItem, decide, discover, fmtViews } from './swipe.mjs';
-import { listAccounts, applySecrets } from './accounts.mjs';
+import { listAccounts, applySecrets, setKey, loadSecrets } from './accounts.mjs';
 import { detectProvider } from './voice.mjs';
 import { accountInsights } from './instagram.mjs';
 import { repurpose } from './repurpose.mjs';
@@ -25,6 +25,7 @@ import { addFromText } from './swipe.mjs';
 import { ensureBrowser } from './computer.mjs';
 import { getLeads, leadsCsv, statusFile } from './chat.mjs';
 import { loadCatalog } from './stylecatalog.mjs';
+import { systemCheck, INSTALLERS, openClaudeLogin, igStatus, getOnboarding, setOnboarding, getAutofill } from './setup.mjs';
 import { getResearch } from './research.mjs';
 import { voiceCatalog, synth } from './voice.mjs';
 import { browserAvailable, findBrowser } from './browser.mjs';
@@ -65,7 +66,7 @@ export function startDashboard({ port = 4177, lan = false, worker = true, open =
 
       if (p === '/api/state') {
         if (!stylesCache) { try { const cat = loadCatalog(); stylesCache = Object.keys(cat).length ? Object.values(cat).map(c => ({ name: c.name, desc: c.desc, tags: c.tags, presenter: c.presenter })) : await styleList(); } catch { stylesCache = []; } }
-        return send(res, 200, { reels: listReels(), styles: stylesCache, accounts: listAccounts(), jobs: listJobs().slice(0, 12), provider: detectProvider('auto'),
+        return send(res, 200, { onboarding: getOnboarding(), mode: getSettings().mode, calls: usageToday().calls, reels: listReels(), styles: stylesCache, accounts: listAccounts(), jobs: listJobs().slice(0, 12), provider: detectProvider('auto'),
           health: { ffmpeg: has('ffmpeg'), browser: browserAvailable() && !!findBrowser(), font: !!findFont(), instagram: listAccounts().length > 0, elevenlabs: !!process.env.ELEVENLABS_API_KEY, heygen: !!process.env.HEYGEN_API_KEY } });
       }
       if (p === '/api/reel' && req.method === 'POST') { const s = createReel(body.title || 'Untitled', body.text || `# ${body.title || 'Untitled'}\nYour hook here.\n`); return send(res, 200, { slug: s }); }
@@ -102,6 +103,19 @@ export function startDashboard({ port = 4177, lan = false, worker = true, open =
         return send(res, 200, { steps, doneCount: steps.filter(x => x.done).length });
       }
       if (p === '/api/guide/confirm' && req.method === 'POST') { const f = path.join(home(), 'state.json'); const d = readJson(f, {}); if (['igLoginConfirmed', 'voiceChecked'].includes(body.id)) d[body.id] = true; writeJson(f, d); return send(res, 200, { ok: true }); }
+
+      if (p === '/api/setup/check') return send(res, 200, { rows: await systemCheck() });
+      if (p === '/api/setup/install' && req.method === 'POST') { if (typeof body.id !== 'string' || !Object.hasOwn(INSTALLERS, body.id)) return send(res, 400, { error: 'unknown installer' }); return send(res, 200, enqueue('install', { id: body.id })); }
+      if (p === '/api/setup/claude-login' && req.method === 'POST') { openClaudeLogin(); return send(res, 200, { ok: true }); }
+      if (p === '/api/setup/ig') return send(res, 200, await igStatus());
+      if (p === '/api/setup/autofill' && req.method === 'POST') { const u = String(body.url || '').trim(); if (!/^https?:\/\/[^\s]+$/i.test(u)) return send(res, 400, { error: 'Enter a full address like https://yoursite.com' }); return send(res, 200, enqueue('autofill', { url: u })); }
+      if (p === '/api/setup/autofill') return send(res, 200, { result: getAutofill() });
+      if (p === '/api/onboarding') { if (req.method === 'POST') setOnboarding({ step: body.step, done: body.done, skipped: body.skipped }); return send(res, 200, getOnboarding()); }
+
+      if (p === '/api/keys') {
+        if (req.method === 'POST') { for (const [k, name, env] of [['elevenlabs', 'elevenlabs', 'ELEVENLABS_API_KEY'], ['heygen', 'heygen', 'HEYGEN_API_KEY']]) { const v = typeof body[k] === 'string' ? body[k].trim() : ''; if (v && /^[\w.-]{8,200}$/.test(v)) { setKey(name, v); process.env[env] = v; } else if (body[k] === '') { setKey(name, ''); delete process.env[env]; } } }
+        const sec = loadSecrets(); return send(res, 200, { elevenlabs: !!sec.elevenlabs, heygen: !!sec.heygen }); // values are never sent back
+      }
       if (p === '/api/today') {
         const open_ = listInbox('open'); const runs = listRuns().slice(0, 3); const st = getSettings(); const u = usageToday();
         return send(res, 200, { brandMissing: missingBrand(), inbox: open_, runs, ideas: listIdeas('new').concat(listIdeas('approved')).slice(0, 8), refs: referenceCount(), mode: st.mode, usage: u, budget: st.budget, posting: getBrand().posting, claude: claudeAvailable() });
@@ -149,6 +163,7 @@ export function startDashboard({ port = 4177, lan = false, worker = true, open =
       if (p === '/api/unschedule' && req.method === 'POST') { const mt = getMeta(body.slug); if (mt) { mt.status = 'rendered'; delete mt.scheduledAt; saveMeta(body.slug, mt); } return send(res, 200, {}); }
       if (p === '/api/post-now' && req.method === 'POST') { const mt = getMeta(body.slug); Object.assign(mt, { caption: body.caption ?? mt.caption ?? mt.title, account: body.account || mt.account, trial: !!body.trial }); saveMeta(body.slug, mt); return send(res, 200, enqueue('post', { slug: body.slug })); }
       if (p === '/api/swipe') return send(res, 200, { items: listSwipe({ status: u.searchParams.get('status') || undefined, niche: u.searchParams.get('niche') || undefined }).map(i => ({ ...i, viewsLabel: fmtViews(i.views) })) });
+      if (p === '/api/swipe/paste' && req.method === 'POST') { const n = addFromText(String(body.text || '').slice(0, 20000), getBrand().niche || 'general'); return send(res, 200, { added: n, total: referenceCount() }); }
       if (p === '/api/swipe/add' && req.method === 'POST') return send(res, 200, addItem(body));
       if (p === '/api/swipe/decide' && req.method === 'POST') return send(res, 200, decide(body.id, body.status));
       if (p === '/api/swipe/discover' && req.method === 'POST') return send(res, 200, { added: await discover(body.account, body.usernames || [], body.niche) });

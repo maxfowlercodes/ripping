@@ -24,6 +24,7 @@ export const TASKS = {
   translate:         { desc: 'Translate a script keeping numbers and visuals',          eco: 'haiku',  balanced: 'haiku',  quality: 'sonnet', effort: 'low',    ttlDays: 90 },
   style_make:        { desc: 'Generate a custom video style',                           eco: 'sonnet', balanced: 'sonnet', quality: 'opus',   effort: 'medium', ttlDays: 90 },
   chat_reply:        { desc: 'Answer a website/Instagram visitor in the business chat', eco: 'haiku', balanced: 'haiku', quality: 'sonnet', effort: 'low', ttlDays: 0 },
+  brand_autofill:    { desc: 'Onboarding: fill in your brand details from your website', eco: 'haiku', balanced: 'sonnet', quality: 'sonnet', effort: 'low', ttlDays: 30, web: true },
   research_site:     { desc: 'First-run: read your website and extract what you really offer', eco: 'sonnet', balanced: 'sonnet', quality: 'opus', effort: 'medium', ttlDays: 30, web: true },
   research_audience: { desc: 'First-run: who buys, their pains and exact words (web search)', eco: 'sonnet', balanced: 'sonnet', quality: 'opus', effort: 'medium', ttlDays: 30, web: true },
   research_competitors: { desc: 'First-run: competitors, adjacent accounts, angles (web search)', eco: 'sonnet', balanced: 'sonnet', quality: 'opus', effort: 'medium', ttlDays: 30, web: true },
@@ -37,7 +38,7 @@ export const TASKS = {
 export const CODE_ONLY = ['lint', 'virality score', 'render', 'caption timing', 'filler cutting', 'scheduling', 'analytics math', 'winner detection', 'carousel layout'];
 
 const settingsPath = () => path.join(home(), 'settings.json');
-export const DEFAULT_SETTINGS = { mode: 'balanced', routing: {}, budget: { dailyCalls: 60, dailyOutputTokens: 120000, chatDaily: 200 }, cache: true, claudeBin: 'claude' };
+export const DEFAULT_SETTINGS = { mode: 'eco', routing: {}, budget: { dailyCalls: 60, dailyOutputTokens: 120000, chatDaily: 200 }, cache: true, claudeBin: 'claude' };
 export const getSettings = () => ({ ...DEFAULT_SETTINGS, ...readJson(settingsPath(), {}), budget: { ...DEFAULT_SETTINGS.budget, ...(readJson(settingsPath(), {}).budget || {}) } });
 export const saveSettings = patch => { const s = { ...getSettings(), ...patch }; writeJson(settingsPath(), s); return s; };
 export function modelFor(task, settings = getSettings()) {

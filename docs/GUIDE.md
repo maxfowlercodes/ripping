@@ -15,12 +15,15 @@ Time to first reel: about 30 minutes, most of it downloads and the one-time rese
 ## 1. Install (Windows)
 1. Download this repo, open PowerShell in the folder.
 2. `powershell -ExecutionPolicy Bypass -File scripts\install-windows.ps1`. If it says to reopen PowerShell, do, then run it again.
-3. Start it with the **Reelkit** shortcut on your Desktop (or `node bin\reelkit.mjs dashboard --open`).
-4. Open the **Guide** tab. It lists every step below and ticks them off itself.
+3. Start it with the **Reelkit** shortcut on your Desktop (or `npm start`).
+4. The setup wizard opens. Follow it. When it finishes, the **Guide** tab keeps a self-ticking checklist.
 
 macOS/Linux: `npm install`, `pip install piper-tts faster-whisper kokoro-onnx soundfile`, `node bin/reelkit.mjs doctor`.
 
-## 2. First-run setup (Guide tab does this in order)
+## 2. First-run setup
+The **setup wizard opens by itself** the first time and does everything below with buttons (installs, sign-in, autofill, voice previews, Instagram login detection). Use this section only if you want to know what each step does or to redo one. You can reopen the wizard any time from Settings → *Run the setup wizard again*.
+
+The Guide tab ticks these off by itself:
 1. **Claude**: Claude tab → *Test Claude connection*. Set mode to **Eco** (cheapest).
 2. **Brand**: Setup → Your brand. Be concrete: what it is, who it is for, their real problem, a CTA word (e.g. PLAYBOOK). Under *Proof points* write one per line as `claim = number` using only real numbers. Add your website URL.
 3. **Deep research** (once): Research tab → *Run*. Four stages: your site, your audience (their own words), competitors, strategy. About 5 to 10 minutes. You get a report with sources, a "do not say" list, content pillars and 10 starter ideas. Items it could not verify are labelled.

@@ -1,0 +1,140 @@
+'use strict';
+// First-run wizard. One person, one computer: plain language, sensible defaults, saves as you go, resumable.
+const OB_STEPS = ['welcome', 'computer', 'claude', 'business', 'look', 'instagram', 'research', 'refs', 'daily', 'done'];
+const OB_TONES = ['Direct', 'Friendly', 'Playful', 'Calm', 'Bold', 'Technical', 'Premium'];
+const OB_REQ = ['node', 'media', 'browser', 'python', 'claude', 'claude-login'];
+const OB_TILE = { node: ['green', 'terminal'], media: ['purple', 'produce'], browser: ['blue', 'globe'], python: ['orange', 'terminal'], claude: ['ink', 'spark'], 'claude-login': ['ink', 'user'], whisper: ['teal', 'mic'], voice: ['pink', 'wave'], ig: ['red', 'camera'], cloudflared: ['gray', 'globe'] };
+
+async function onboarding() {
+  let i = Math.min(S.state.onboarding.step || 0, OB_STEPS.length - 1); const wrap = $('#main');
+  const hero = (color, icon, title, text) => `<div class="onb-hero">${tile(color, icon, 26)}<h1>${title}</h1><p>${text}</p></div>`;
+  const foot = (o = {}) => `<div class="onb-foot">${o.back === false ? '' : '<button class="alt" id="back">Back</button>'}<span class="sp"></span>${o.skip ? `<button class="plain" id="skip">${o.skip}</button>` : ''}<button class="lg" id="next" ${o.disabled ? 'disabled' : ''}>${o.next || 'Continue'}</button></div>`;
+  const shell = body => { wrap.innerHTML = `<div class="onb-wrap"><div class="onb-top"><img src="/icon.svg" width="28" height="28" alt="" style="border-radius:7px"><div class="dots">${OB_STEPS.map((_, k) => `<i class="${k <= i ? 'on' : ''}"></i>`).join('')}</div><button class="plain" id="later">Set up later</button></div><div class="onb-card">${body}</div></div>`; $('#later').onclick = () => { sessionStorage.setItem('rk.skipOnb', '1'); location.hash = '#today'; }; };
+  const go = async n => { stop(); i = Math.max(0, Math.min(OB_STEPS.length - 1, n)); await api('/onboarding', { step: i }); draw(); window.scrollTo(0, 0); };
+  const wire = (o = {}) => { const b = $('#back'); if (b) b.onclick = () => go(i - 1); const n = $('#next'); if (n) n.onclick = async () => { if (o.before) { const ok = await o.before(); if (ok === false) return; } go(i + 1); }; const sk = $('#skip'); if (sk) sk.onclick = () => go(i + 1); };
+  const pollJob = (id, onTick, ms = 1500) => new Promise(done => { const t = setInterval(async () => { await refresh(); const j = S.state.jobs.find(x => x.id === id); onTick && onTick(j); if (j && ['done', 'failed'].includes(j.status)) { clearInterval(t); done(j); } }, ms); S.timers.push(t); });
+
+  const steps = {
+    // ------------------------------------------------------------------ 0 welcome
+    async welcome() {
+      shell(`${hero('ink', 'spark', 'Welcome to Reelkit.', 'Your own Reels studio. It studies your business, writes the scripts, makes the videos and posts them, with Claude doing the thinking on this computer.')}
+      <div class="list">${[['green', 'shield', 'Private', 'Everything runs here. Only what you send to Claude leaves this computer.'], ['blue', 'clock', 'About 15 minutes', 'Set up once. After that it is one click per reel. You can stop and pick up later.'], ['orange', 'lock', 'You stay in control', 'It asks before anything is posted, until you tell it not to.']].map(([c, ico, t, d]) => `<div class="li">${tile(c, ico)}<div class="grow"><b>${t}</b><span class="mut">${d}</span></div></div>`).join('')}</div>${foot({ back: false, next: 'Get started' })}`); wire();
+    },
+    // ------------------------------------------------------------------ 1 computer
+    async computer() {
+      shell(`${hero('gray', 'cpu', 'Your computer', 'Reelkit checks what it needs. Anything missing can usually be installed with one click.')}<div id="rows" class="list"><div class="li"><span class="spinner"></span><span class="mut">Checking…</span></div></div><div id="warn" class="mut" style="font-size:14px"></div>${foot({ next: 'Continue' })}`); wire();
+      const installing = {}; let rows = [];
+      const draw = () => {
+        const req = rows.filter(r => !r.optional && r.id !== 'ig'); const miss = req.filter(r => !r.ok && OB_REQ.includes(r.id));
+        $('#rows').innerHTML = rows.filter(r => r.id !== 'ig').map(r => { const [c, ico] = OB_TILE[r.id] || ['gray', 'cpu']; const j = installing[r.id]; const busy = j && !['done', 'failed'].includes(j.status);
+          return `<div class="li" style="flex-wrap:wrap">${tile(c, ico)}<div class="grow"><b>${esc(r.label)}${r.optional ? ' <span class="chip">optional</span>' : ''}</b><span class="mut">${esc(r.detail)}</span></div>
+          ${r.ok ? `<span class="ok">${ic('check', 20)}</span>` : busy ? '<span class="spinner"></span>' : r.fix?.kind === 'install' ? `<button class="tint sm" data-fix="${r.id}">${esc(r.fix.label)}</button>` : r.fix?.kind === 'terminal' ? `<button class="tint sm" data-fix="${r.id}">${esc(r.fix.label)}</button>` : r.fix?.kind === 'manual' ? `<span class="mut" style="font-size:13px;max-width:260px;text-align:right">${esc(r.fix.note)}</span>` : ''}
+          ${j ? `<div class="logbox" style="width:100%">${esc((j.log || []).slice(-4).join('\n') || j.stage || 'Starting…')}${j.status === 'failed' ? '\n' + esc(j.error || '') : ''}</div>` : ''}</div>`; }).join('');
+        $('#warn').textContent = miss.length ? `${miss.length} required item${miss.length > 1 ? 's' : ''} still missing. You can continue, but Reelkit will not work until they are fixed.` : 'Everything required is ready.';
+        document.querySelectorAll('[data-fix]').forEach(b => (b.onclick = async () => { const r = rows.find(x => x.id === b.dataset.fix);
+          if (r.fix.kind === 'terminal') { await api('/setup/claude-login', {}); toast('Finish signing in in the window that opened, then it updates here.'); return; }
+          const job = await api('/setup/install', { id: r.fix.id }); installing[r.id] = job; draw(); pollJob(job.id, j => { installing[r.id] = j || job; draw(); }).then(async () => { await check(); }); }));
+      };
+      const check = async () => { rows = (await api('/setup/check')).rows; draw(); };
+      await check(); S.timers.push(setInterval(() => { if (!Object.values(installing).some(j => j && !['done', 'failed'].includes(j.status))) check(); }, 4000));
+    },
+    // ------------------------------------------------------------------ 2 claude
+    async claude() {
+      const cfg = await api('/claude'); let mode = cfg.settings.mode; const chk = (await api('/setup/check')).rows.find(r => r.id === 'claude-login');
+      shell(`${hero('ink', 'spark', 'Claude', 'Reelkit uses your own Claude account to write and to operate the browser. You decide how much usage it may spend.')}
+      <div class="list"><div class="li">${tile('ink', 'user')}<div class="grow"><b>Claude account</b><span class="mut">${chk?.ok ? 'Signed in' : 'Not signed in. Go back one step to sign in.'}</span></div><button class="alt sm" id="test">Test connection</button></div></div><div id="tm" class="mut" style="margin:-6px 4px 14px;font-size:14px;min-height:20px"></div>
+      <p class="eyebrow">How much should it spend?</p>
+      ${[['eco', 'Eco', 'Recommended', 'Small jobs use the smallest model, repeats are cached. Lowest usage.'], ['balanced', 'Balanced', '', 'Better writing, still frugal.'], ['quality', 'Quality', '', 'The strongest models for writing. Uses the most.']].map(([k, n, tag, d]) => `<div class="pick ${mode === k ? 'sel' : ''}" data-mode="${k}"><span class="radio"></span><div><b>${n}</b> ${tag ? `<span class="chip cta">${tag}</span>` : ''}<div class="mut">${d}</div></div></div>`).join('')}
+      <p class="mut" style="font-size:13px">Code does the easy work for free: checking scripts, rendering video, cutting footage, scheduling. You can change this any time.</p>${foot()}`); wire();
+      document.querySelectorAll('[data-mode]').forEach(c => (c.onclick = async () => { mode = c.dataset.mode; document.querySelectorAll('[data-mode]').forEach(x => x.classList.toggle('sel', x === c)); await api('/claude', { mode }); }));
+      $('#test').onclick = async () => { $('#test').disabled = true; $('#tm').innerHTML = '<span class="spinner"></span> Testing…'; try { const r = await api('/claude/test', {}); $('#tm').innerHTML = `<span class="ok">Works</span> (${esc(r.model)}, ${r.usage.output} tokens)`; } catch (e) { $('#tm').innerHTML = `<span class="bad">${esc(e.message)}</span>`; } $('#test').disabled = false; };
+    },
+    // ------------------------------------------------------------------ 3 business
+    async business() {
+      const { brand: b } = await api('/brand'); let tones = (b.tone || '').split(',').map(x => x.trim()).filter(x => OB_TONES.map(t => t.toLowerCase()).includes(x.toLowerCase())).map(x => x[0].toUpperCase() + x.slice(1).toLowerCase()); let proof = b.proof.slice();
+      const field = (id, label, val, ph, area) => `<label for="${id}">${label}</label>${area ? `<textarea id="${id}" placeholder="${ph}" style="min-height:76px">${esc(val)}</textarea>` : `<input id="${id}" value="${esc(val)}" placeholder="${ph}">`}`;
+      shell(`${hero('teal', 'user', 'About your business', 'Claude only talks about what you tell it here, so be concrete. The fastest way is to let it read your website.')}
+      <div class="card"><label for="o_site" style="margin-top:0">Your website</label><div class="row"><input id="o_site" class="grow" value="${esc(b.website || '')}" placeholder="https://yourbusiness.com"><button class="tint" id="fill">${ic('spark', 15)} Fill in for me</button></div><div id="fillmsg" class="mut" style="font-size:13px;margin-top:8px;min-height:18px"></div></div>
+      <div class="card">${field('o_product', 'What it is (one line)', b.product, 'A scheduling tool for yoga studios')}${field('o_aud', 'Who it is for', b.audience, 'Independent yoga studio owners')}${field('o_prob', 'The problem it solves, in their words', b.problem, 'Chasing no-shows and managing bookings by hand', true)}
+      <label>Tone of voice (up to three)</label><div class="row" id="tones" style="gap:8px">${OB_TONES.map(t => `<button type="button" class="alt sm ${tones.includes(t) ? 'on' : ''}" data-t="${t}">${t}</button>`).join('')}</div>
+      ${field('o_cta', 'The word viewers comment to get your link', b.cta || 'GUIDE', 'GUIDE')}</div>
+      <div class="card"><b>Proof</b><p class="mut" style="margin:4px 0 8px;font-size:14px">Real numbers only. Claude is never allowed to use a number that is not listed here.</p><div id="proof"></div><button class="alt sm" id="addp">${ic('plus', 14)} Add a proof point</button><div id="pfound"></div></div><div id="onerr" class="bad" style="min-height:20px;font-size:14px"></div>${foot()}`);
+      const drawProof = () => { $('#proof').innerHTML = proof.map((p, k) => `<div class="row" style="margin-bottom:8px"><input data-pc="${k}" value="${esc(p.claim)}" placeholder="Claim, e.g. studios using it" class="grow" style="min-width:160px"><input data-pn="${k}" value="${esc(p.number || '')}" placeholder="Number" style="width:110px"><button class="plain" data-pd="${k}" aria-label="Remove">${ic('trash', 16)}</button></div>`).join('');
+        document.querySelectorAll('[data-pc]').forEach(e => (e.oninput = () => (proof[+e.dataset.pc].claim = e.value))); document.querySelectorAll('[data-pn]').forEach(e => (e.oninput = () => (proof[+e.dataset.pn].number = e.value))); document.querySelectorAll('[data-pd]').forEach(e => (e.onclick = () => { proof.splice(+e.dataset.pd, 1); drawProof(); })); };
+      drawProof(); $('#addp').onclick = () => { proof.push({ claim: '', number: '' }); drawProof(); };
+      document.querySelectorAll('[data-t]').forEach(bt => (bt.onclick = () => { const t = bt.dataset.t; if (tones.includes(t)) tones = tones.filter(x => x !== t); else if (tones.length < 3) tones.push(t); document.querySelectorAll('[data-t]').forEach(x => x.classList.toggle('on', tones.includes(x.dataset.t))); }));
+      const apply = d => { const set = (id, v) => { if (v && !$('#' + id).value.trim()) $('#' + id).value = v; }; set('o_product', d.product); set('o_aud', d.audience); set('o_prob', d.problem);
+        if (!tones.length && d.tone) { tones = OB_TONES.filter(t => d.tone.toLowerCase().includes(t.toLowerCase())).slice(0, 3); document.querySelectorAll('[data-t]').forEach(x => x.classList.toggle('on', tones.includes(x.dataset.t))); }
+        if ($('#o_cta').value === 'GUIDE' && d.cta_ideas?.[0]) $('#o_cta').value = d.cta_ideas[0].toUpperCase().replace(/[^A-Z0-9]/g, '');
+        const found = (d.proof_found || []).filter(p => !proof.some(x => x.claim === p.claim)); $('#pfound').innerHTML = found.length ? `<p class="mut" style="font-size:13px;margin:14px 0 6px">Found on your site. Tap to add:</p>${found.map((p, k) => `<button class="alt sm" data-pf="${k}" style="margin:0 6px 6px 0">${esc((p.number ? p.number + ' · ' : '') + p.claim.slice(0, 60))}</button>`).join('')}` : '';
+        document.querySelectorAll('[data-pf]').forEach(bt => (bt.onclick = () => { const p = found[+bt.dataset.pf]; proof.push({ claim: p.claim, number: p.number || '' }); bt.remove(); drawProof(); })); };
+      $('#fill').onclick = async () => { const url = $('#o_site').value.trim(); if (!/^https?:\/\//i.test(url)) { $('#fillmsg').innerHTML = '<span class="bad">Enter the full address, starting with https://</span>'; return; } $('#fill').disabled = true; $('#fillmsg').innerHTML = '<span class="spinner"></span> Reading your site… about a minute.';
+        try { const job = await api('/setup/autofill', { url }); const j = await pollJob(job.id); if (j.status === 'done') { const r = (await api('/setup/autofill')).result; apply(r.data); $('#fillmsg').innerHTML = '<span class="ok">Done.</span> Filled in what was empty. Please check it reads right.'; } else $('#fillmsg').innerHTML = `<span class="bad">${esc(j.error || 'Could not read the site')}</span>`; } catch (e) { $('#fillmsg').innerHTML = `<span class="bad">${esc(e.message)}</span>`; } $('#fill').disabled = false; };
+      wire({ before: async () => { const v = id => $('#' + id).value.trim(); if (!v('o_product') || !v('o_aud') || !v('o_prob')) { $('#onerr').textContent = 'Please fill in the first three fields. Claude needs them.'; return false; }
+        await api('/brand', { website: v('o_site'), product: v('o_product'), audience: v('o_aud'), problem: v('o_prob'), tone: tones.map(t => t.toLowerCase()).join(', ') || 'direct, specific', cta: v('o_cta').toUpperCase().replace(/[^A-Z0-9]/g, '') || 'GUIDE', proof: proof.filter(p => p.claim.trim()) }); } });
+    },
+    // ------------------------------------------------------------------ 4 look & sound
+    async look() {
+      const { brand: b } = await api('/brand'); const P = b.production; let av = P.avatar || 'none';
+      shell(`${hero('purple', 'camera', 'Look and sound', 'Pick how your reels look and sound. Auto lets Claude choose a fitting style each time and avoid repeats.')}
+      <div class="card"><b>Style</b><div id="sg" style="margin-top:12px;max-height:440px;overflow:auto;padding:2px"></div></div>
+      <div class="card"><div class="row"><div class="grow"><b>Presenter</b><div class="mut" style="font-size:14px">An animated character that speaks along. Optional.</div></div>${segHtml('av', [['none', 'None'], ['founder', 'Founder'], ['robot', 'Robot'], ['blob', 'Blob']], av)}</div></div>
+      <div class="card"><b>Voice</b><p class="mut" style="margin:4px 0 10px;font-size:14px">Press Preview to hear each one. Kokoro is the best free voice.</p><div id="vp"></div><label for="o_lang">Language</label><select id="o_lang">${['en', 'es', 'fr', 'it', 'pt', 'de', 'ja', 'ko', 'zh', 'hi', 'ru', 'uk', 'he', 'ar', 'el', 'tr'].map(l => `<option ${l === P.lang ? 'selected' : ''}>${l}</option>`).join('')}</select><div style="margin-top:14px">${swRow('o_sfx', 'Sound effects', P.sfx !== false, 'A soft whoosh on cuts and a pop on key words')}</div></div>${foot()}`);
+      styleGallery($('#sg'), P.style || 'auto', v => (P.style = v), { auto: true }); bindSeg('av', v => (av = v)); const vget = await voicePicker($('#vp'), P, () => $('#o_lang').value);
+      wire({ before: async () => { await api('/brand', { production: { style: P.style || 'auto', avatar: av, ...vget(), lang: $('#o_lang').value, sfx: $('#o_sfx').checked } }); } });
+    },
+    // ------------------------------------------------------------------ 5 instagram
+    async instagram() {
+      const { brand: b } = await api('/brand'); let method = b.posting.method || 'computer';
+      shell(`${hero('pink', 'post', 'Posting', 'How should your reels get to Instagram?')}
+      <div id="methods">${[['computer', 'Claude uses a browser window', 'Recommended', 'Claude fills in the post for you in a separate Reelkit browser. No developer account needed.'], ['manual', 'I will post it myself', '', 'Reelkit makes the video and the caption, copies the caption and opens the file.'], ['api', 'Instagram API', 'Later', 'Needs a Meta developer app. Skip for now, you can switch any time in Settings.']].map(([k, n, tag, d]) => `<div class="pick ${method === k ? 'sel' : ''}" data-m="${k}"><span class="radio"></span><div><b>${n}</b> ${tag ? `<span class="chip ${tag === 'Recommended' ? 'cta' : ''}">${tag}</span>` : ''}<div class="mut">${d}</div></div></div>`).join('')}</div>
+      <div id="igbox"></div>
+      <div class="card">${swRow('o_review', 'Ask me before anything is shared', b.posting.mode !== 'auto', 'Claude stops at the final Share button so you can look first. Keep this on at the start.')}<label for="o_user">Your Instagram username</label><input id="o_user" value="${esc(b.posting.username || '')}" placeholder="yourname"></div>
+      <p class="mut" style="font-size:13px">Instagram's terms restrict automating its website. Keep review on, post at a human pace, and use your own account only.</p>${foot()}`);
+      const igDraw = () => { $('#igbox').innerHTML = method === 'computer' ? `<div class="list"><div class="li">${tile('red', 'camera')}<div class="grow"><b>Instagram login</b><span class="mut" id="igs">Open the browser, then log in once. Your password never touches Reelkit.</span></div><button class="tint sm" id="igopen">Open browser</button></div></div>` : ''; const o = $('#igopen'); if (o) o.onclick = async () => { await api('/browser', {}); toast('Reelkit browser opened'); }; };
+      document.querySelectorAll('[data-m]').forEach(c => (c.onclick = () => { method = c.dataset.m; document.querySelectorAll('[data-m]').forEach(x => x.classList.toggle('sel', x === c)); igDraw(); })); igDraw();
+      const t = setInterval(async () => { const s = $('#igs'); if (!s) return; const r = await api('/setup/ig'); s.innerHTML = r.loggedIn ? '<span class="ok">Logged in.</span> You are all set here.' : r.browser ? '<span class="spinner"></span> Waiting for you to log in in the Reelkit browser…' : 'Open the browser, then log in once. Your password never touches Reelkit.'; if (r.loggedIn) { const o = $('#igopen'); if (o) o.style.display = 'none'; await api('/guide/confirm', { id: 'igLoginConfirmed' }); } }, 3000); S.timers.push(t);
+      wire({ before: async () => { await api('/brand', { posting: { method, mode: $('#o_review').checked ? 'review' : 'auto', username: $('#o_user').value.trim().replace(/^@/, '') } }); } });
+    },
+    // ------------------------------------------------------------------ 6 research
+    async research() {
+      const r0 = await api('/research'); const done = !!r0.research?.finished;
+      shell(`${hero('orange', 'research', 'Research', 'Claude reads your website, studies your audience in their own words, maps your competitors and drafts a content plan. It runs once and every script uses it.')}
+      <div class="card" id="rc"><div class="row"><div class="grow"><b>${done ? 'Research complete' : 'Deep research'}</b><div class="mut" style="font-size:14px">Takes 5 to 10 minutes. You can keep going and it finishes in the background.</div></div><button id="rr" class="${done ? 'alt' : ''}">${done ? 'Run again' : 'Start research'}</button></div><div id="rp"></div></div>${foot({ skip: done ? '' : 'Do this later' })}`);
+      const stg = { site: 'Your website', audience: 'Your audience', competitors: 'Competitors', strategy: 'Strategy' };
+      const show = j => { $('#rp').innerHTML = j ? `<div class="bar" style="margin-top:14px"><i style="width:${Math.round((j.progress || 0.05) * 100)}%"></i></div><p class="mut" style="font-size:13px;margin:8px 0 0">${j.status === 'failed' ? `<span class="bad">${esc(j.error)}</span>` : esc(j.stage || 'Starting…')}</p>` : ''; };
+      $('#rr').onclick = async () => { $('#rr').disabled = true; const job = await api('/research/run', { force: done }); show(job); const j = await pollJob(job.id, show, 3000); if (j.status === 'done') { $('#rc').querySelector('b').textContent = 'Research complete'; $('#rp').innerHTML = '<p class="ok" style="margin:12px 0 0">Done. Your report and 10 starter ideas are ready.</p>'; } $('#rr').disabled = false; };
+      wire();
+    },
+    // ------------------------------------------------------------------ 7 references
+    async refs() {
+      const t = await api('/today');
+      shell(`${hero('green', 'swipe', 'References', 'Paste a few reels that did well in your niche. Claude copies their structure, never their words.')}
+      <div class="card"><label for="o_refs" style="margin-top:0">One reel per line</label><textarea id="o_refs" style="min-height:130px" placeholder="https://instagram.com/…/reel/… | 2.4M | 170K | their hook\nlink | views | the account's follower count | caption"></textarea><p class="mut" style="font-size:13px;margin:8px 0 0">Format: link | views | followers or usual views | caption. The ratio is how Reelkit spots reels that beat their own account. <span id="rcount">${t.refs} saved.</span></p><p><button class="alt" id="addr">Save references</button></p></div>${foot({ skip: 'Skip for now' })}`);
+      $('#addr').onclick = async () => { const text = $('#o_refs').value; if (!text.trim()) return; const r = await api('/swipe/paste', { text }); $('#o_refs').value = ''; $('#rcount').textContent = `${r.total} saved.`; toast(`Saved ${r.added}`); }; wire();
+    },
+    // ------------------------------------------------------------------ 8 daily
+    async daily() {
+      const { brand: b } = await api('/brand'); const D = b.daily; const win = /Win/i.test(navigator.platform);
+      shell(`${hero('red', 'bell', 'Daily check-in', 'Once a day Reelkit asks for new references and your focus, then proposes ideas. Reelkit has to be running for this to happen.')}
+      <div class="list"><div class="li">${tile('red', 'clock')}<div class="grow"><b>Time</b></div><input type="time" id="d_time" value="${esc(D.time)}" style="width:130px"></div>
+      <div class="li">${tile('orange', 'bell')}<div class="grow"><b>Daily check-in</b><span class="mut">A card on Today plus a notification</span></div>${swHtml('d_on', D.enabled)}</div>
+      <div class="li">${tile('gray', 'bell')}<div class="grow"><b>Desktop notifications</b></div>${swHtml('d_note', b.notify)}</div>
+      <div class="li">${tile('blue', 'play')}<div class="grow"><b>Make a reel for me if I do not answer</b><span class="mut">Still stops before sharing if you keep review on</span></div>${swHtml('d_auto', D.autopilot)}</div></div>
+      ${win ? `<div class="card"><div class="row"><div class="grow"><b>Start with Windows</b><div class="mut" style="font-size:14px">Keeps the check-in and scheduled posts running after a restart.</div></div><button class="tint" id="auto">Set up</button></div><div id="am" class="mut" style="font-size:13px;margin-top:8px"></div></div>` : ''}${foot()}`);
+      const au = $('#auto'); if (au) au.onclick = async () => { au.disabled = true; $('#am').innerHTML = '<span class="spinner"></span> Setting up…'; const job = await api('/setup/install', { id: 'autostart' }); const j = await pollJob(job.id); $('#am').innerHTML = j.status === 'done' ? '<span class="ok">Done.</span> Reelkit will start when you sign in.' : `<span class="bad">${esc(j.error || 'Failed')}</span>`; au.disabled = false; };
+      wire({ before: async () => { await api('/brand', { notify: $('#d_note').checked, daily: { time: $('#d_time').value || '09:00', enabled: $('#d_on').checked, autopilot: $('#d_auto').checked } }); } });
+    },
+    // ------------------------------------------------------------------ 9 done
+    async done() {
+      const g = await api('/guide'); await api('/onboarding', { step: i, done: true });
+      shell(`${hero('green', 'check', 'You are all set.', 'Here is where things stand. Anything unfinished lives in the Guide and Settings.')}
+      <div class="list">${g.steps.filter(x => x.id !== 'chat').map(x => `<a class="li" href="${esc(x.link)}" style="color:var(--text);text-decoration:none"><span class="${x.done ? 'ok' : 'mut'}">${ic(x.done ? 'check' : 'clock', 20)}</span><div class="grow"><b>${esc(x.title)}</b></div>${x.done ? '' : '<span class="mut" style="font-size:13px">Later</span>'}</a>`).join('')}</div>
+      <p class="mut" style="font-size:14px">Your first reel will be render only, so nothing is posted. Watch it on Today, then switch to "Ask first" when you are happy.</p>
+      <div class="onb-foot"><button class="alt" id="back">Back</button><span class="sp"></span><button class="alt" id="today">Go to Today</button><button class="lg" id="first">Make my first reel</button></div>`);
+      $('#back').onclick = () => go(i - 1); $('#today').onclick = () => (location.hash = '#today'); $('#first').onclick = async () => { await api('/run', { post: 'none' }); location.hash = '#today'; };
+    },
+  };
+  const draw = () => steps[OB_STEPS[i]]();
+  draw();
+}

@@ -3,6 +3,12 @@
 **One click:** *references → idea → script → motion-graphics video (with a lip-synced presenter) → caption → post to Instagram → track results.*
 Runs on your own computer. Claude Code is the brain (your own plan, used sparingly); Chrome/Edge + ffmpeg are the studio; your Instagram is operated by Claude through a dedicated browser window. No subscription, no cloud.
 
+## Start here (it is just you)
+1. **Windows:** in PowerShell, from this folder: `powershell -ExecutionPolicy Bypass -File scripts\install-windows.ps1` (installs Node and Python, then everything else). **Mac/Linux:** `npm install`.
+2. **Open Reelkit:** double-click the **Reelkit** shortcut on your Desktop (or run `npm start`). A window opens.
+3. **The first time it opens a setup wizard** (about 15 minutes, resumable): it checks your computer and installs what is missing with one click, connects Claude, reads your website to fill in your business details, lets you hear voices and pick a look, detects your Instagram login, runs the research, and sets your daily check-in. Skip anything and finish later from **Guide** or **Settings**.
+4. **Press Make & Post.** Keep "Ask first" on until you trust it.
+
 **New here? Read [`docs/GUIDE.md`](docs/GUIDE.md) (plain step-by-step) or open the in-app Guide tab.**
 
 Research on the product this is modelled on: [`docs/RESEARCH.md`](docs/RESEARCH.md) · what is built vs. untested: [`docs/PARITY.md`](docs/PARITY.md)
@@ -10,10 +16,12 @@ Research on the product this is modelled on: [`docs/RESEARCH.md`](docs/RESEARCH.
 ## What's in it
 | Area | What you get |
 |---|---|
-| **Today (home)** | Big **Make & Post** button, run timeline, inbox (daily check-in, "any new references?", approve ideas, *review before sharing*), idea queue, usage meter |
+| **Setup wizard** | Ten steps for one person: computer check with one-click installs, Claude sign-in and spend level, **autofill your business from your website**, style/presenter/voice with previews, Instagram login with live detection, research, references, daily routine. Saves as you go |
+| **Today (home)** | **Make & Post**, a run timeline, inbox (daily check-in, "any new references?", approve ideas, *review before sharing*), idea queue, usage meter |
+| **Design** | Apple-style interface: frosted sidebar and mobile tab bar, large titles, grouped lists, segmented controls, real switches, custom line icons (no emoji), light and dark. Plus three keynote-style video templates (53 styles total) |
 | **Claude control** | Eco / Balanced / Quality modes, per-task model table (haiku/sonnet/opus), result cache, daily call + token budgets, usage ledger, cheap-first escalation. See below |
 | **Computer use** | Claude drives a dedicated Chrome profile (Playwright MCP): posts the reel, reads insights, researches competitors. Browser survives between calls, so there is a real *prepare → you review → share* gate |
-| **Style library (50)** | 50 styles with thumbnails and mood/energy/niche tags. In *Auto*, code ranks the best fits for your brand and recent variety, and Claude picks from a short list inside the script call (no extra model call). Includes synthwave, sunburst, pop-halftone, pill and karaoke captions, glass, noir, notebook, kraft, matrix, bokeh and more |
+| **Style library (53)** | 53 styles with thumbnails and mood/energy/niche tags. In *Auto*, code ranks the best fits for your brand and recent variety, and Claude picks from a short list inside the script call (no extra model call). Includes synthwave, sunburst, pop-halftone, pill and karaoke captions, glass, noir, notebook, kraft, matrix, bokeh and more |
 | **Motion v2 (engine)** | transitions, transitions (wipe/flash/zoom/glitch), camera pushes, grain, 17 widgets (counter, charts, **racing bars**, tier list, chat, notifications, donut, compare, timeline, browser, price, stats…), word-exact captions with key-word effects |
 | **Presenters** | Free built-in animated avatars (founder, robot, blob) lip-synced to the real audio; blink, brow-raise on key words, hand gestures. HeyGen supported if you have a key |
 | **Footage cutter** | Your own video: Whisper transcript → removes um/uh, "you know", stutters, dead air (click words to override) → punch-ins, audio cleanup, loudness → captions in any style |

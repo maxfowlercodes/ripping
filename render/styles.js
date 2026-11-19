@@ -98,6 +98,15 @@
   R('fintech-clean',   { desc: 'Crisp blue-on-white, numbers first', font: 'Inter', bg: 'dots', key: 'highlight', transition: 'flash',
     colors: { bg1: '#f8fafc', bg2: '#e0e7ff', dot: '#1d4ed822', accent: '#2563eb', fg: '#0b1b3a', keyFg: '#ffffff', card: '#ffffff', cardFg: '#0b1b3a' }, caption: cap({ weight: 800 }) });
 
+  // ---- keynote-style: restrained, big type, one accent
+  const SF = "-apple-system,'SF Pro Display','Segoe UI Variable Display','Segoe UI',Inter";
+  R('keynote-dark',    { desc: 'Pure black, large confident type, one blue-to-violet accent', font: SF, bg: 'flat', key: 'gradient', transition: 'none', camera: 0.018, progressBar: false,
+    colors: { bg1: '#000000', bg2: '#0b0b0f', accent: '#2997ff', accent2: '#bf5af2', fg: '#f5f5f7', keyFg: '#000', card: '#1c1c1e', cardFg: '#f5f5f7' }, caption: cap({ weight: 650, size: 120, sizeVis: 100, ls: '-0.035em' }) });
+  R('keynote-light',   { desc: 'Soft white, large type, calm blue accent', font: SF, bg: 'flat', key: 'gradient', transition: 'none', camera: 0.018, progressBar: false,
+    colors: { bg1: '#fbfbfd', bg2: '#f5f5f7', accent: '#0071e3', accent2: '#5e5ce6', fg: '#1d1d1f', keyFg: '#fff', card: '#ffffff', cardFg: '#1d1d1f' }, caption: cap({ weight: 650, size: 120, sizeVis: 100, ls: '-0.035em' }) });
+  R('keynote-graphite',{ desc: 'Graphite grey with a warm accent, premium and quiet', font: SF, bg: 'rim', key: 'gradient', transition: 'zoom', camera: 0.02, progressBar: false, grain: 0.05,
+    colors: { bg1: '#161618', bg2: '#2a2a2e', accent: '#ff9f0a', accent2: '#ff375f', fg: '#f5f5f7', keyFg: '#161618', card: '#232326', cardFg: '#f5f5f7' }, caption: cap({ weight: 600, size: 116, sizeVis: 98, ls: '-0.03em' }) });
+
   // ---- tags: used by the style chooser (mood, niches, energy 1-5, light/dark)
   const T = (m, n, e, tone) => ({ mood: m.split(' '), niches: n.split(' '), energy: e, tone });
   const TAGS = {
@@ -118,6 +127,7 @@
     'cinema-noir': T('dramatic serious luxury', 'legal luxury coaching creator', 2, 'dark'), 'podcast-karaoke': T('calm friendly', 'coaching creator education', 2, 'dark'), 'tiktok-pill': T('energetic playful', 'creator ecommerce fitness', 5, 'dark'),
     notebook: T('cozy friendly', 'education coaching kids creator', 2, 'light'), 'kraft-stamp': T('bold cozy', 'food local-business ecommerce', 4, 'light'), 'sticky-note': T('playful cozy', 'education coaching creator', 3, 'light'),
     glass: T('friendly techy luxury', 'saas ai fintech', 3, 'dark'), 'mono-minimal': T('minimal luxury calm', 'saas luxury agency', 1, 'light'), 'luxury-gold': T('luxury dramatic', 'luxury real-estate coaching legal', 1, 'dark'),
+    'keynote-dark': T('minimal luxury calm', 'saas luxury agency ai creator', 1, 'dark'), 'keynote-light': T('minimal calm friendly', 'saas education coaching ai', 1, 'light'), 'keynote-graphite': T('luxury calm dramatic', 'luxury saas agency', 2, 'dark'),
     'sage-calm': T('calm cozy', 'health coaching food', 1, 'light'), 'fintech-clean': T('serious calm', 'fintech saas b2b real-estate', 2, 'light'),
   };
   for (const n in TAGS) if (window.RK.styles[n]) window.RK.styles[n].tags = TAGS[n];

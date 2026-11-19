@@ -1,0 +1,64 @@
+'use strict';
+// Reelkit UI kit: custom line icons (no emoji), navigation, dialogs, switches, segmented controls.
+const ICON = {
+  today: '<circle cx="12" cy="12" r="4"/><path d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.3 5.3l1.6 1.6M17.1 17.1l1.6 1.6M5.3 18.7l1.6-1.6M17.1 6.9l1.6-1.6"/>',
+  swipe: '<rect x="6.5" y="4" width="11" height="16" rx="2.6"/><path d="M3 8.5v7M21 8.5v7"/>',
+  script: '<path d="M5 6.5h14M5 12h14M5 17.5h8"/>',
+  produce: '<rect x="3" y="5" width="18" height="14" rx="3.2"/><path d="m10.3 9.4 4.6 2.6-4.6 2.6z" fill="currentColor"/>',
+  footage: '<path d="M4 12v0M8 8.5v7M12 4.5v15M16 8.5v7M20 12v0"/>',
+  post: '<path d="M21 3 10.5 13.5"/><path d="M21 3l-6.5 18-4-7.5L3 9.5z"/>',
+  analyze: '<path d="M5.5 20v-9M12 20V4.5M18.5 20v-6.5"/>',
+  repurpose: '<path d="M4 11.5a8 8 0 0 1 14-4.7L20 9"/><path d="M20 4v5h-5"/><path d="M20 12.5a8 8 0 0 1-14 4.7L4 15"/><path d="M4 20v-5h5"/>',
+  leads: '<path d="M4 7a3 3 0 0 1 3-3h10a3 3 0 0 1 3 3v7a3 3 0 0 1-3 3h-6l-4.5 3.5V17H7a3 3 0 0 1-3-3z"/>',
+  research: '<circle cx="10.8" cy="10.8" r="6.3"/><path d="m20 20-4.7-4.7"/>',
+  claude: '<path d="M4 7.5h9M17 7.5h3M4 16.5h3M11 16.5h9"/><circle cx="15" cy="7.5" r="2"/><circle cx="9" cy="16.5" r="2"/>',
+  setup: '<circle cx="12" cy="12" r="3"/><path d="M12 3v2.4M12 18.6V21M3 12h2.4M18.6 12H21M5.6 5.6l1.7 1.7M16.7 16.7l1.7 1.7M5.6 18.4l1.7-1.7M16.7 7.3l1.7-1.7"/>',
+  guide: '<path d="M5 4.5h9a4 4 0 0 1 4 4V20H9a4 4 0 0 1-4-4z"/><path d="M5 16a4 4 0 0 1 4-4h9"/>',
+  more: '<circle cx="5.5" cy="12" r="1.4" fill="currentColor"/><circle cx="12" cy="12" r="1.4" fill="currentColor"/><circle cx="18.5" cy="12" r="1.4" fill="currentColor"/>',
+  check: '<path d="m5 12.5 4.5 4.5L19 7.5"/>', x: '<path d="M6 6l12 12M18 6 6 18"/>', plus: '<path d="M12 5v14M5 12h14"/>', play: '<path d="M8 5.5v13l11-6.5z" fill="currentColor"/>',
+  pause: '<path d="M8 5.5v13M16 5.5v13"/>', refresh: '<path d="M20 11a8 8 0 0 0-14.5-4M4 4v4h4M4 13a8 8 0 0 0 14.5 4M20 20v-4h-4"/>', trash: '<path d="M4.5 7h15M9 7V4.5h6V7M6.5 7l1 13h9l1-13"/>',
+  copy: '<rect x="8.5" y="8.5" width="11" height="11" rx="2.5"/><path d="M15.5 8.5v-2a2.5 2.5 0 0 0-2.5-2.5H6.5A2.5 2.5 0 0 0 4 6.5V13a2.5 2.5 0 0 0 2.5 2.5h2"/>',
+  mail: '<rect x="3" y="5.5" width="18" height="13" rx="3"/><path d="m4 8 8 5.5L20 8"/>', external: '<path d="M14 4h6v6M20 4l-9 9M18 14v4.5a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 4 18.5v-11A1.5 1.5 0 0 1 5.5 6H10"/>',
+  spark: '<path d="M12 3.5l1.9 5.2 5.2 1.9-5.2 1.9L12 17.7l-1.9-5.2-5.2-1.9 5.2-1.9zM18.5 16.5l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z"/>',
+  shield: '<path d="M12 3.5 5 6.2v5.3c0 4.2 2.8 7.4 7 9 4.2-1.6 7-4.8 7-9V6.2z"/><path d="m9 12 2.2 2.2L15.5 10"/>', lock: '<rect x="5" y="10.5" width="14" height="9.5" rx="2.5"/><path d="M8 10.5V8a4 4 0 0 1 8 0v2.5"/>',
+  globe: '<circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.6 2.5 3.8 5.3 3.8 8.5s-1.2 6-3.8 8.5c-2.6-2.5-3.8-5.3-3.8-8.5S9.4 6 12 3.5z"/>',
+  mic: '<rect x="9" y="3.5" width="6" height="11" rx="3"/><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3"/>', user: '<circle cx="12" cy="8.5" r="3.8"/><path d="M4.5 20a7.5 7.5 0 0 1 15 0"/>', bell: '<path d="M6 17V11a6 6 0 0 1 12 0v6l1.5 2h-15zM10 21h4"/>',
+  chevron: '<path d="m9 5.5 6.5 6.5L9 18.5"/>', back: '<path d="m15 5.5-6.5 6.5 6.5 6.5"/>', clock: '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>', terminal: '<rect x="3" y="4.5" width="18" height="15" rx="3"/><path d="m7.5 10 3 2.5-3 2.5M13 15h3.5"/>',
+  download: '<path d="M12 4v11M7.5 11 12 15.5 16.5 11M5 19.5h14"/>', cpu: '<rect x="6.5" y="6.5" width="11" height="11" rx="2.5"/><path d="M9.5 3.5v3M14.5 3.5v3M9.5 17.5v3M14.5 17.5v3M3.5 9.5h3M3.5 14.5h3M17.5 9.5h3M17.5 14.5h3"/>',
+  camera: '<path d="M4 8.5A2.5 2.5 0 0 1 6.5 6h1.8l1.2-2h5l1.2 2h1.8A2.5 2.5 0 0 1 20 8.5v8A2.5 2.5 0 0 1 17.5 19h-11A2.5 2.5 0 0 1 4 16.5z"/><circle cx="12" cy="12.5" r="3.4"/>', key: '<circle cx="8" cy="15" r="3.5"/><path d="m10.5 12.5 8-8M15 8l2.5 2.5"/>', wave: '<path d="M3 12h2M7 8v8M11 4v16M15 8v8M19 12h2"/>',
+};
+const ic = (n, s = 18) => `<svg class="ic" width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON[n] || ''}</svg>`;
+const tile = (color, icon, size = 18) => `<span class="tile t-${color}">${ic(icon, size)}</span>`;
+
+const NAV = [
+  ['Create', [['today', 'Today'], ['swipe', 'Swipe'], ['script', 'Script'], ['produce', 'Produce'], ['footage', 'Footage']]],
+  ['Grow', [['post', 'Post'], ['analyze', 'Analyze'], ['repurpose', 'Repurpose'], ['leads', 'Leads']]],
+  ['Studio', [['research', 'Research'], ['claude', 'Claude'], ['setup', 'Settings'], ['guide', 'Guide']]],
+];
+const TABBAR = ['today', 'produce', 'post', 'analyze'];
+function buildNav(active, st) {
+  $('#nav').innerHTML = NAV.map(([g, items]) => `<div class="navgrp">${g}</div>` + items.map(([k, l]) => `<a href="#${k}" class="${k === active ? 'on' : ''}">${ic(k, 18)}<span>${l}</span></a>`).join('')).join('');
+  const all = NAV.flatMap(([, i]) => i); const label = k => all.find(x => x[0] === k)?.[1];
+  $('#tabbar').innerHTML = TABBAR.map(k => `<a href="#${k}" class="${k === active ? 'on' : ''}">${ic(k, 24)}<span>${label(k)}</span></a>`).join('') + `<a href="#" id="moretab" class="${TABBAR.includes(active) ? '' : 'on'}">${ic('more', 24)}<span>More</span></a>`;
+  $('#moretab').onclick = e => { e.preventDefault(); ask({ title: 'More', list: all.filter(([k]) => !TABBAR.includes(k)).map(([k, l]) => ({ k, l })) }); };
+  if (st) $('#sidefoot').innerHTML = `<span>Claude mode: <b style="color:var(--text)">${esc(st.mode || 'eco')}</b></span><span>${st.calls || 0} model calls today</span>`;
+}
+
+/** Apple-style dialog. ask({title, message, input, placeholder, value, confirm, cancel, danger, list}) -> string | true | null */
+function ask(o) {
+  return new Promise(res => {
+    const layer = $('#layer'); const close = v => { layer.innerHTML = ''; res(v); };
+    layer.innerHTML = `<div class="scrim"><div class="sheet" role="dialog" aria-modal="true"><h4>${esc(o.title || '')}</h4>${o.message ? `<p>${esc(o.message)}</p>` : '<div style="height:6px"></div>'}
+      ${o.input ? `<input id="askin" placeholder="${esc(o.placeholder || '')}" value="${esc(o.value || '')}" autocomplete="off">` : ''}
+      ${o.list ? `<div class="list" style="margin:8px 0 0">${o.list.map(x => `<a class="li" href="#${x.k}" style="color:var(--text);text-decoration:none">${ic(x.k, 18)}<span class="grow">${esc(x.l)}</span>${ic('chevron', 16)}</a>`).join('')}</div>` : ''}
+      <div class="acts2">${o.list ? '<button class="alt" data-x="cancel">Close</button>' : `<button class="alt" data-x="cancel">${esc(o.cancel || 'Cancel')}</button><button class="${o.danger ? 'danger' : ''}" data-x="ok">${esc(o.confirm || 'OK')}</button>`}</div></div></div>`;
+    const inp = $('#askin'); if (inp) { inp.focus(); inp.select(); inp.onkeydown = e => { if (e.key === 'Enter') close(inp.value.trim() || null); }; }
+    layer.querySelector('[data-x=cancel]').onclick = () => close(null); const okb = layer.querySelector('[data-x=ok]'); if (okb) okb.onclick = () => close(inp ? inp.value.trim() || null : true);
+    layer.querySelector('.scrim').onclick = e => { if (e.target.classList.contains('scrim')) close(null); }; layer.querySelectorAll('.li').forEach(a => (a.onclick = () => close(null)));
+    document.onkeydown = e => { if (e.key === 'Escape' && layer.innerHTML) close(null); };
+  });
+}
+const swHtml = (id, on) => `<input type="checkbox" class="sw" id="${id}" ${on ? 'checked' : ''}>`;
+const swRow = (id, label, on, hint) => `<label class="swrow"><span>${label}${hint ? `<span class="mut" style="display:block;font-size:13px">${hint}</span>` : ''}</span>${swHtml(id, on)}</label>`;
+const segHtml = (id, options, value) => `<div class="seg" id="${id}">${options.map(([v, l]) => `<button type="button" data-v="${esc(v)}" class="${v === value ? 'on' : ''}">${esc(l)}</button>`).join('')}</div>`;
+function bindSeg(id, onChange) { const h = document.getElementById(id); h.querySelectorAll('button').forEach(b => (b.onclick = () => { h.querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b)); onChange(b.dataset.v); })); }

@@ -33,6 +33,10 @@ export async function runJob(j) {
       const r = await renderReel2({ script: sc, style: st, voice: voice || 'auto', lang: lang || m.lang || 'en', music: music || m.music, out, draft: !!draft, avatarFile, workDir: path.join(reelDir(slug), 'work'), onLog: log,
         onProgress: ({ stage, done, total }) => { j.stage = stage; j.progress = +(((stage === 'voice' ? 0 : 0.2) + (done / total) * (stage === 'voice' ? 0.2 : 0.8)).toFixed(2)); writeJson(jf(j.id), j); } });
       const m2 = getMeta(slug); Object.assign(m2, { durations: r.durations, seconds: r.seconds, style: st, lang: lang || m2.lang || 'en', rendered: new Date().toISOString() }); if (!draft && m2.status !== 'posted' && m2.status !== 'scheduled') m2.status = 'rendered'; saveMeta(slug, m2);
+    } else if (j.type === 'install') {
+      const { runInstaller, INSTALLERS } = await import('./setup.mjs'); j.stage = INSTALLERS[j.payload.id]?.label || 'Installing'; writeJson(jf(j.id), j); await runInstaller(j.payload.id, log);
+    } else if (j.type === 'autofill') {
+      const { autofillBrand } = await import('./research.mjs'); const { setAutofill } = await import('./setup.mjs'); const data = await autofillBrand(j.payload.url, { log }); setAutofill({ at: new Date().toISOString(), url: j.payload.url, data });
     } else if (j.type === 'research') {
       const { runResearch } = await import('./research.mjs'); await runResearch({ force: !!j.payload.force, log, onProgress: ({ label, stage }) => { j.stage = label; j.progress = { site: 0.1, audience: 0.35, competitors: 0.6, strategy: 0.85 }[stage] || 0.1; writeJson(jf(j.id), j); } });
     } else if (j.type === 'footage-analyze') {

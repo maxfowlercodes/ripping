@@ -74,3 +74,11 @@ export function report(r) {
   const sources = [...(d.site?.sources || []), ...(d.audience?.sources || []), ...(d.competitors?.sources || [])]; if (sources.length) L.push('\n## Sources', ...sources.map(s => `- ${s.url} ${s.note || ''}`));
   return L.filter(Boolean).join('\n');
 }
+
+const AUTOFILL = { type: 'object', properties: { product: { type: 'string' }, audience: { type: 'string' }, problem: { type: 'string' }, tone: { type: 'string' }, niche: { type: 'string' }, cta_ideas: arr, proof_found: { type: 'array', items: { type: 'object', properties: { claim: { type: 'string' }, number: { type: 'string' }, source_url: { type: 'string' } }, required: ['claim'] } } }, required: ['product', 'audience', 'problem'] };
+/** Onboarding shortcut: read the user's website and propose brand fields. Proof is only what the site itself states. */
+export async function autofillBrand(url, { log = () => {} } = {}) {
+  if (!/^https?:\/\//i.test(url)) throw new Error('Enter a full website address starting with https://');
+  const r = await askClaude({ task: 'brand_autofill', prompt: `Read ${url} (homepage, plus pricing/about if linked) with WebFetch. Propose, in plain words an owner would use: product (one line), audience (who it is for), problem (the real problem it solves, from the customer's side), tone (2-4 adjectives matching the site), niche (2-3 words), 3 short CTA keyword ideas (one word, upper case), and proof_found: ONLY numbers or claims the site itself states (with the page URL). ${RULES}`, system: 'You are a careful brand analyst. ' + RULES, schema: AUTOFILL, log });
+  return r.output;
+}
