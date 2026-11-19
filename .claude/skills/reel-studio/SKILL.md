@@ -9,6 +9,9 @@ You are the writer, strategist and visual planner. `reelkit` (`node bin/reelkit.
 
 Ask the user ONCE (and save to `reelkit-data/brand.md`): product, who it's for + their real problem, 3 proof points with real numbers, tone, languages, the CTA keyword. Never invent numbers, testimonials, or results. If a number is unknown, ask.
 
+## Usage discipline (read first)
+The app routes every model call through `src/claude.mjs`; when YOU are the one working in this repo, follow the same rule: do NOT spend model effort on what code does for free (lint, score, render, scheduling, analytics math, filler cutting, carousel layout). Use `reelkit autopilot` for the one-click flow, `reelkit mode eco` to keep small tasks on haiku, `reelkit usage` to see spend. Do not re-read files or re-generate things already cached.
+
 ## 1. Swipe (research)  →  `references/research.md`
 Find what's already winning in the niche, then extract formulas. Sources, in order: `swipe list --saved` (user's saved reels); competitor accounts via `swipe discover a,b,c --niche X` (official API, needs connected IG); references the user pastes (links + views). Never scrape logged-in Instagram. For each saved reel record: hook formula, structure, length, payoff, CTA, outlier multiplier. Write `reelkit-data/swipe-notes.md`. Then "Find winners": propose 10 ideas for THIS product, each = hook + one-line payoff + which saved reel it borrows structure from.
 

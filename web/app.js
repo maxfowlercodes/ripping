@@ -6,7 +6,7 @@ const toast = m => { const t = $('#toast'); t.textContent = m; t.style.display =
 const mmss = s => `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, '0')}`;
 const fmt = n => (n == null ? '–' : n >= 1e6 ? (n / 1e6).toFixed(1) + 'M' : n >= 1e4 ? Math.round(n / 1e3) + 'K' : n.toLocaleString());
 const S = { state: null, slug: localStorage.getItem('rk.slug') || '', style: localStorage.getItem('rk.style') || 'aurora-dark', timers: [] };
-const TABS = [['swipe', '01', 'Swipe'], ['script', '02', 'Script'], ['produce', '03', 'Produce'], ['post', '04', 'Post'], ['analyze', '05', 'Analyze'], ['repurpose', '06', 'Repurpose'], ['setup', '', 'Setup']];
+const TABS = [['today', '★', 'Today'], ['swipe', '01', 'Swipe'], ['script', '02', 'Script'], ['produce', '03', 'Produce'], ['post', '04', 'Post'], ['analyze', '05', 'Analyze'], ['repurpose', '06', 'Repurpose'], ['footage', '🎬', 'Footage'], ['claude', '🧠', 'Claude'], ['setup', '⚙', 'Setup']];
 const stop = () => { S.timers.forEach(clearInterval); S.timers = []; };
 const reels = () => S.state?.reels || [];
 const cur = () => reels().find(r => r.slug === S.slug) || reels()[0];
@@ -17,9 +17,9 @@ function newReelBtn(fn) { return `<button class="alt" id="newreel">+ New reel</b
 function bindNew(fn) { const b = $('#newreel'); if (b) b.onclick = async () => { const t = prompt('Reel title'); if (!t) return; const r = await api('/reel', { title: t }); S.slug = r.slug; await refresh(); fn(); }; }
 
 async function route() {
-  stop(); const h = (location.hash || '#swipe').slice(1);
+  stop(); const h = (location.hash || '#today').slice(1);
   $('#nav').innerHTML = TABS.map(([k, n, l]) => `<a href="#${k}" class="${k === h ? 'on' : ''}"><b>${n}</b>${l}</a>`).join('');
-  try { await refresh(); await ({ swipe, script, produce, post, analyze, repurpose, setup }[h] || swipe)(); } catch (e) { $('#main').innerHTML = `<div class="card bad">${esc(e.message)}</div>`; }
+  try { await refresh(); await ({ today, swipe, script, produce, post, analyze, repurpose, footage, claude, setup }[h] || today)(); } catch (e) { $('#main').innerHTML = `<div class="card bad">${esc(e.message)}</div>`; }
 }
 addEventListener('hashchange', route);
 
@@ -128,12 +128,122 @@ async function repurpose() {
   $('#addh').onclick = async () => { if ($('#hk').value) { await api('/hooks', { slug: sel.slug, hook: $('#hk').value }); await refresh(); repurpose(); } };
 }
 
+
+// ---------------------------------------------------------------- Today
+const STEPICON = { done: '✔', running: '…', waiting: '⏸', failed: '✘', pending: '·', skipped: '–' };
+async function today() {
+  const t = await api('/today'); const run = t.runs.find(r => ['queued', 'running', 'waiting'].includes(r.status)) || t.runs[0];
+  const u = t.usage;
+  $('#main').innerHTML = `<h2>Today</h2><p class="sub">One click makes a reel from your references and posts it. Claude is used only where code can't do the job.</p>
+  ${t.brandMissing.length ? `<div class="card" style="border-color:var(--ac)"><b>Set up your brand first</b><p class="mut">Missing: ${esc(t.brandMissing.join(', '))}. <a href="#setup">Open Setup</a></p></div>` : ''}
+  ${!t.claude ? `<div class="card" style="border-color:var(--bad)"><b>Claude Code isn't installed</b><p class="mut">Install it (<code>npm i -g @anthropic-ai/claude-code</code>) and run <code>claude</code> once to sign in.</p></div>` : ''}
+  <div class="card"><div class="row"><div class="grow"><b style="font-size:20px">Make &amp; Post</b><div class="mut">references → idea → script → render → caption → post</div></div>
+  <select id="postmode" style="width:auto"><option value="review" ${t.posting.mode === 'review' ? 'selected' : ''}>review before sharing</option><option value="auto" ${t.posting.mode === 'auto' ? 'selected' : ''}>post automatically</option><option value="none" ${t.posting.mode === 'none' ? 'selected' : ''}>render only</option></select>
+  <button id="go" style="font-size:18px;padding:14px 26px" ${run && ['queued', 'running', 'waiting'].includes(run.status) ? 'disabled' : ''}>▶ Make &amp; Post</button></div>
+  <p class="mut" style="margin:10px 0 0">Mode <b>${esc(t.mode)}</b> · today ${u.calls} Claude calls (${u.cacheHits} free from cache) · ${u.by.haiku?.calls || 0} haiku · ${u.by.sonnet?.calls || 0} sonnet · ${u.by.opus?.calls || 0} opus. <a href="#claude">Control models</a></p></div>
+  ${run ? `<div class="card"><div class="row"><b class="grow">Run ${esc(run.id)} <span class="chip">${esc(run.status)}</span></b>${['queued', 'running', 'waiting'].includes(run.status) ? '<button class="alt" id="cancel">Cancel</button>' : ''}</div>
+    ${run.steps.map(s => `<div class="lintli"><span class="${s.status === 'done' ? 'ok' : s.status === 'failed' ? 'bad' : 'mut'}" style="width:18px">${STEPICON[s.status]}</span><b style="width:120px">${esc(s.name)}</b><span class="mut grow">${esc(s.detail || '')}</span></div>`).join('')}
+    ${run.error ? `<p class="bad">${esc(run.error)}</p>` : ''}${run.ctx?.slug && run.status === 'done' ? `<video controls playsinline src="/file/${esc(run.ctx.slug)}/reel.mp4" style="margin-top:10px"></video>` : ''}</div>` : ''}
+  ${t.inbox.map(inboxCard(t)).join('')}
+  <div class="card"><div class="row"><b class="grow">Idea queue</b><button class="alt" id="genideas">Generate 5 ideas</button></div>
+  ${t.ideas.map(i => `<div class="row" style="margin:8px 0"><span class="chip ${i.status === 'approved' ? 'cta' : ''}">${esc(i.status)}</span><div class="grow"><b>${esc(i.hook)}</b><br><span class="mut">${esc(i.payoff)}</span></div><button class="alt" data-run="${esc(i.id)}">Make this</button></div>`).join('') || `<p class="mut">No ideas yet. ${t.refs} references saved.</p>`}</div>`;
+  $('#postmode').onchange = async e => { await api('/brand', { posting: { mode: e.target.value } }); };
+  $('#go').onclick = async () => { await api('/run', { post: $('#postmode').value }); toast('Started'); today(); };
+  const c = $('#cancel'); if (c) c.onclick = async () => { await api('/run/cancel', { id: run.id }); today(); };
+  $('#genideas').onclick = async e => { e.target.disabled = true; e.target.textContent = 'Thinking…'; try { const r = await api('/ideas', { generate: true }); toast(`${r.added} new ideas`); } catch (er) { toast(er.message); } today(); };
+  document.querySelectorAll('[data-run]').forEach(b => (b.onclick = async () => { const i = t.ideas.find(x => x.id === b.dataset.run); await api('/run', { post: $('#postmode').value, idea: i }); today(); }));
+  bindInbox(t);
+  if (run && ['queued', 'running'].includes(run.status)) S.timers.push(setInterval(today, 2500));
+}
+function inboxCard(t) {
+  return it => {
+    const base = `<div class="card" data-inbox="${esc(it.id)}"><div class="row"><b class="grow">${esc(it.title)}</b><span class="chip">${esc(it.type)}</span></div><p class="mut" style="white-space:pre-wrap">${esc(it.body)}</p>`;
+    if (it.type === 'checkin' || it.type === 'ask-references') return base + `<label>Paste reference reels (one per line: url | views | account size | caption)</label><textarea class="ref" style="min-height:90px" placeholder="https://instagram.com/.../reel/... | 2.4M | 170K | their hook"></textarea>${it.type === 'checkin' ? '<label>Anything to focus on today? (launch, offer, topic)</label><input class="focus">' : ''}<p class="row"><button data-act="submit">Save</button>${it.type === 'ask-references' ? '<button class="alt" data-act="skip">Skip references</button>' : ''}<button class="alt" data-act="dismiss">Dismiss</button></p></div>`;
+    if (it.type === 'approve-ideas') { const ideas = (it.payload.ids || []).map(id => t.ideas.find(i => i.id === id)).filter(Boolean); return base + ideas.map(i => `<label style="text-transform:none;font-size:14px;color:var(--fg)"><input type="checkbox" class="idea" value="${esc(i.id)}" checked style="width:auto"> ${esc(i.hook)} <span class="mut">${esc(i.payoff)}</span></label>`).join('') + `<p class="row"><button data-act="ideas">Approve selected</button><button class="alt" data-act="dismiss">Dismiss</button></p></div>`; }
+    if (it.type === 'review-post') return base + `<video controls playsinline src="/file/${esc(it.payload.slug)}/reel.mp4" style="max-width:240px"></video><p class="mut">${it.payload.method === 'computer' ? 'Claude has filled in the post in the Reelkit browser window and stopped before Share.' : ''}</p><p class="row"><button data-act="share">Share it</button><button class="alt" data-act="manual">I shared it myself</button><button class="alt" data-act="cancel">Cancel</button></p></div>`;
+    if (it.type === 'need-login') return base + `<p class="row"><button data-act="browser">Open Reelkit browser</button><button class="alt" data-act="resume">I'm logged in, continue</button></p></div>`;
+    if (it.type === 'need-brand') return base + `<p><a class="btn" href="#setup">Open Setup</a></p></div>`;
+    return base + `<p><button class="alt" data-act="dismiss">Dismiss</button></p></div>`;
+  };
+}
+function bindInbox() {
+  document.querySelectorAll('[data-inbox]').forEach(card => {
+    const id = card.dataset.inbox; card.querySelectorAll('[data-act]').forEach(b => (b.onclick = async () => {
+      const act = b.dataset.act; const ans = {};
+      if (act === 'dismiss') { await api('/inbox/dismiss', { id }); return today(); }
+      if (act === 'browser') { await api('/browser', {}); return toast('Browser opened'); }
+      if (act === 'submit') { ans.text = card.querySelector('.ref')?.value || ''; ans.focus = card.querySelector('.focus')?.value || ''; }
+      if (act === 'skip') ans.skip = true; if (act === 'ideas') ans.approved = [...card.querySelectorAll('.idea:checked')].map(x => x.value);
+      if (act === 'share' || act === 'cancel') ans.action = act; if (act === 'manual') ans.action = 'manual-done'; if (act === 'resume') ans.resumed = true;
+      await api('/inbox/answer', { id, answer: ans }); toast('Saved'); today();
+    }));
+  });
+}
+
+// ---------------------------------------------------------------- Footage
+async function footage() {
+  $('#main').innerHTML = `<h2>Footage</h2><p class="sub">Your own talking-head video: removes um/uh, "you know", stutters and dead air, cleans the audio, adds captions in your style. All local.</p>
+  <div class="card"><div class="split"><div><label>Video file</label><input type="file" id="ff" accept="video/*"></div><div><label>Cut level</label><select id="lvl"><option value="light">light: um, uh, er only</option><option value="standard" selected>standard: + you know, I mean, stutters</option><option value="aggressive">aggressive: + basically, literally, actually</option></select></div></div>
+  <p class="row"><button id="an">Transcribe &amp; find fillers</button><span id="msg" class="mut"></span></p></div><div id="plan"></div>`;
+  let file = S.footageFile || ''; const msg = t => ($('#msg').textContent = t);
+  $('#an').onclick = async () => {
+    const f = $('#ff').files[0]; if (!f && !file) return toast('Choose a video'); $('#an').disabled = true;
+    if (f) { msg('Uploading…'); const r = await fetch('/api/footage/upload?name=' + encodeURIComponent(f.name), { method: 'POST', body: f }); file = (await r.json()).file; S.footageFile = file; }
+    msg('Transcribing… (the first run downloads a speech model)'); await api('/footage/analyze', { file, level: $('#lvl').value });
+    const poll = setInterval(async () => { const r = await fetch('/api/footage/plan?file=' + encodeURIComponent(file)); const pl = r.ok ? await r.json() : { pending: true }; if (!pl.pending) { clearInterval(poll); msg(''); $('#an').disabled = false; showPlan(pl); } else { await refresh(); const j = S.state.jobs.find(x => x.type === 'footage-analyze'); if (j?.status === 'failed') { clearInterval(poll); msg(j.error); $('#an').disabled = false; } } }, 2000); S.timers.push(poll);
+  };
+  function showPlan(plan) {
+    const over = {}; const styles = S.state.styles;
+    const draw = () => { const cut = plan.words.filter((w, i) => (over[i] != null ? over[i] : w.cut)).length;
+      $('#plan').innerHTML = `<div class="card"><div class="row"><b class="grow">Transcript</b><span class="chip">${cut}/${plan.words.length} words cut</span><span class="chip">${plan.duration}s → ~${(plan.after).toFixed(1)}s</span></div>
+      <p style="line-height:2.1;font-size:17px">${plan.words.map((w, i) => { const c = over[i] != null ? over[i] : w.cut; return `<span data-w="${i}" title="${esc(w.why || '')}" style="cursor:pointer;padding:1px 4px;margin:1px;border-radius:6px;${c ? 'background:#ef444433;color:#f87171;text-decoration:line-through' : ''}">${esc(w.t)}</span>`; }).join(' ')}</p><p class="mut">Click any word to toggle. Whisper can mishear fillers, so check the red ones.</p></div>
+      <div class="card"><div class="split"><div><label>Caption style</label><select id="cs">${['volt', 'aurora-dark', 'mint-ledger', 'neon-night', 'bold-stripes', 'clean-white', 'paper', 'sunset', 'swiss-red'].filter(n => styles.find(x => x.name === n)).map(n => `<option>${esc(n)}</option>`).join('')}</select></div><div><label>Captions</label><select id="cc"><option value="1">on</option><option value="0">off</option></select></div></div><p><button id="rn">Cut &amp; caption</button> <span id="rmsg" class="mut"></span></p><div id="out"></div></div>`;
+      document.querySelectorAll('[data-w]').forEach(e => (e.onclick = () => { const i = +e.dataset.w; const cur = over[i] != null ? over[i] : plan.words[i].cut; over[i] = !cur; draw(); }));
+      $('#rn').onclick = async () => { $('#rn').disabled = true; $('#rmsg').textContent = 'Working…'; const r = await api('/footage/render', { file, level: $('#lvl').value, style: $('#cs').value, captions: $('#cc').value === '1', overrides: over });
+        const poll2 = setInterval(async () => { await refresh(); const j = S.state.jobs.find(x => x.id === r.id); if (j?.status === 'done') { clearInterval(poll2); $('#rmsg').textContent = 'Done'; $('#rn').disabled = false; $('#out').innerHTML = `<video controls playsinline src="/footage/${esc(r.out)}?${Date.now()}" style="margin-top:10px"></video>`; } else if (j?.status === 'failed') { clearInterval(poll2); $('#rmsg').textContent = j.error; $('#rn').disabled = false; } }, 2000); S.timers.push(poll2); };
+    };
+    draw();
+  }
+}
+
+// ---------------------------------------------------------------- Claude
+async function claude() {
+  const c = await api('/claude'); const u = c.usage; const st = c.settings;
+  $('#main').innerHTML = `<h2>Claude</h2><p class="sub">Every model call goes through here. Code does the easy work for free; small tasks use the small model; results are cached.</p>
+  <div class="card"><b>Mode</b><div class="row" style="margin-top:8px">${[['eco', 'Eco', 'haiku wherever possible'], ['balanced', 'Balanced', 'sonnet for writing, haiku for the rest'], ['quality', 'Quality', 'opus for writing, sonnet for the rest']].map(([k, n, d]) => `<button class="${st.mode === k ? '' : 'alt'}" data-mode="${k}">${n}<br><span style="font-weight:400;font-size:12px">${d}</span></button>`).join('')}</div></div>
+  <div class="card tw"><table><tr><th>Task</th><th>What it does</th><th>Model</th></tr>${c.tasks.map(t => `<tr><td><code>${esc(t.id)}</code>${t.computer ? ' 🖥' : ''}</td><td>${esc(t.desc)}</td><td><select data-task="${esc(t.id)}" style="width:auto">${['auto', ...c.models].map(m => `<option value="${m}" ${(m === 'auto' ? !t.overridden : t.model === m && t.overridden) ? 'selected' : ''}>${m === 'auto' ? 'auto (' + t.model + ')' : m}</option>`).join('')}</select></td></tr>`).join('')}</table>
+  <p class="mut">🖥 = Claude drives your browser. It tries the small model first and escalates to the next one only if the result fails validation.</p></div>
+  <div class="split"><div class="card"><b>Usage today</b><p>${u.calls} model calls · <span class="ok">${u.cacheHits} served from cache (free)</span> · ${u.output.toLocaleString()} output tokens</p>${Object.entries(u.by).map(([k, v]) => `<div class="lintli"><b style="width:70px">${esc(k)}</b><span>${v.calls} calls · ${v.input.toLocaleString()} in · ${v.output.toLocaleString()} out</span></div>`).join('') || '<p class="mut">No calls yet.</p>'}
+  <label>Daily call budget</label><input id="bc" type="number" value="${st.budget.dailyCalls}"><label>Daily output-token budget</label><input id="bt" type="number" value="${st.budget.dailyOutputTokens}"><p><button id="sv" class="alt">Save budget</button></p></div>
+  <div class="card"><b>Never sent to a model</b><p class="mut">${c.codeOnly.map(esc).join(' · ')}.</p><p><button id="test" class="alt">Test Claude connection</button> <span id="tm" class="mut">${c.available ? '' : 'Claude Code CLI not found'}</span></p></div></div>`;
+  document.querySelectorAll('[data-mode]').forEach(b => (b.onclick = async () => { await api('/claude', { mode: b.dataset.mode }); claude(); }));
+  document.querySelectorAll('[data-task]').forEach(sel => (sel.onchange = async () => { const r = { ...st.routing }; if (sel.value === 'auto') delete r[sel.dataset.task]; else r[sel.dataset.task] = sel.value; await api('/claude', { routing: r }); claude(); }));
+  $('#sv').onclick = async () => { await api('/claude', { budget: { dailyCalls: +$('#bc').value, dailyOutputTokens: +$('#bt').value } }); toast('Saved'); };
+  $('#test').onclick = async () => { $('#tm').textContent = 'Testing…'; try { const r = await api('/claude/test', {}); $('#tm').textContent = `✔ works (${r.model}, ${r.usage.output} output tokens)`; } catch (e) { $('#tm').textContent = e.message; } };
+}
+
 // ---------------------------------------------------------------- Setup
 async function setup() {
-  const h = S.state.health; const row = (ok, t, fix) => `<div class="lintli"><span class="${ok ? 'ok' : 'bad'}">${ok ? '✔' : '✘'}</span><span>${t}${ok ? '' : ` <span class="mut">${fix}</span>`}</span></div>`;
-  $('#main').innerHTML = `<h2>Setup</h2><p class="sub">Everything runs on this computer.</p><div class="card">${row(h.ffmpeg, 'ffmpeg', 'Install: winget install Gyan.FFmpeg')}${row(h.browser, 'Chrome or Edge + playwright-core (renderer)', 'Run: npm install')}${row(h.font, 'Fonts', 'Set REELKIT_FONT')}
-  ${row(h.instagram, 'Instagram account (posting + analytics)', 'reelkit account add … (docs/INSTAGRAM.md)')}${row(h.elevenlabs, 'ElevenLabs key (optional, best voices + exact caption timing)', 'reelkit key elevenlabs &lt;key&gt;')}${row(h.heygen, 'HeyGen key (optional, avatar videos)', 'reelkit key heygen &lt;key&gt;')}
-  <p class="mut">Voice in use: <b>${esc(S.state.provider)}</b>. Accounts: ${S.state.accounts.map(a => esc(a.name)).join(', ') || 'none'}.</p></div>
-  <div class="card"><b>Phone access</b><p class="mut">Run <code>reelkit dashboard --lan</code>, open the printed link on your phone, then “Add to Home Screen”. The link contains a private token.</p></div>`;
+  const h = S.state.health; const { brand: b } = await api('/brand'); const P = b.production, Po = b.posting, D = b.daily;
+  const row = (ok, t, fix) => `<div class="lintli"><span class="${ok ? 'ok' : 'bad'}">${ok ? '✔' : '✘'}</span><span>${t}${ok ? '' : ` <span class="mut">${fix}</span>`}</span></div>`;
+  const f = (id, label, val, type = 'text') => `<label>${label}</label><input id="${id}" type="${type}" value="${esc(val)}">`;
+  $('#main').innerHTML = `<h2>Setup</h2><p class="sub">Everything runs on this computer.</p>
+  <div class="card"><b>Your brand</b><p class="mut">Claude only uses facts you put here. Never invent numbers: add real proof points.</p>${f('b_product', 'Product (one line)', b.product)}${f('b_audience', 'Who it is for', b.audience)}${f('b_problem', 'Their real problem', b.problem)}<div class="split"><div>${f('b_cta', 'CTA keyword (viewers comment this)', b.cta)}</div><div>${f('b_niche', 'Niche tag', b.niche)}</div></div>${f('b_tone', 'Tone', b.tone)}
+  <label>Proof points (one per line: claim = number)</label><textarea id="b_proof" style="min-height:80px">${esc(b.proof.map(p => p.claim + (p.number ? ' = ' + p.number : '')).join('\n'))}</textarea><label>Competitor / inspiration handles (comma separated)</label><input id="b_comp" value="${esc(b.competitors.join(', '))}"></div>
+  <div class="card"><b>Production</b><div class="split"><div><label>Default style</label><select id="p_style">${S.state.styles.map(s => `<option ${s.name === P.style ? 'selected' : ''}>${esc(s.name)}</option>`).join('')}</select></div><div><label>Presenter</label><select id="p_av">${['none', 'founder', 'robot', 'blob'].map(a => `<option ${a === P.avatar ? 'selected' : ''}>${a}</option>`).join('')}${P.avatar?.startsWith('heygen') ? `<option selected>${esc(P.avatar)}</option>` : ''}</select></div></div>
+  <div class="split"><div><label>Voice</label><select id="p_voice">${['auto', 'piper', 'elevenlabs', 'edge', 'sapi', 'say', 'espeak', 'silent'].map(v => `<option ${v === P.voice ? 'selected' : ''}>${v}</option>`).join('')}</select></div><div><label>Language</label><select id="p_lang">${['en', 'es', 'fr', 'it', 'pt', 'de', 'ja', 'ko', 'zh', 'hi', 'ru', 'uk', 'he', 'ar', 'el', 'tr'].map(l => `<option ${l === P.lang ? 'selected' : ''}>${l}</option>`).join('')}</select></div></div></div>
+  <div class="card"><b>Posting</b><div class="split"><div><label>Method</label><select id="o_method"><option value="computer" ${Po.method === 'computer' ? 'selected' : ''}>Claude uses my browser (no API needed)</option><option value="api" ${Po.method === 'api' ? 'selected' : ''}>Instagram API</option><option value="manual" ${Po.method === 'manual' ? 'selected' : ''}>Manual (copy caption, open file)</option></select></div><div><label>Before sharing</label><select id="o_mode"><option value="review" ${Po.mode === 'review' ? 'selected' : ''}>ask me first</option><option value="auto" ${Po.mode === 'auto' ? 'selected' : ''}>post automatically</option><option value="none" ${Po.mode === 'none' ? 'selected' : ''}>render only</option></select></div></div>
+  ${f('o_user', 'Your Instagram username (for reading insights)', Po.username)}<label><input type="checkbox" id="o_trial" style="width:auto" ${Po.trial ? 'checked' : ''}> post as trial reel when possible</label>
+  <p class="row"><button class="alt" id="browser">Open Reelkit browser to log in to Instagram</button><span class="mut">Log in once; the login stays in this dedicated profile.</span></p></div>
+  <div class="card"><b>Daily routine</b><label><input type="checkbox" id="d_on" style="width:auto" ${D.enabled ? 'checked' : ''}> Ask me for references and today's focus every day</label><div class="split"><div>${f('d_time', 'Time', D.time, 'time')}</div><div>${f('d_min', 'Minimum references', D.minReferences, 'number')}</div></div>
+  <label><input type="checkbox" id="d_auto" style="width:auto" ${D.autopilot ? 'checked' : ''}> If I don't answer within <input id="d_grace" type="number" value="${D.graceMinutes}" style="width:80px;display:inline"> minutes, run Make &amp; Post automatically (still pauses for review if that is on)</label><label><input type="checkbox" id="n_on" style="width:auto" ${b.notify ? 'checked' : ''}> Desktop notifications</label></div>
+  <p><button id="save" style="font-size:17px">Save</button></p>
+  <div class="card"><b>Health</b>${row(h.ffmpeg, 'ffmpeg', 'winget install Gyan.FFmpeg')}${row(h.browser, 'Chrome or Edge + playwright-core', 'npm install')}${row(S.state.provider !== 'silent', 'Voice: ' + esc(S.state.provider), 'pip install piper-tts, then reelkit voices install en')}${row(h.instagram || Po.method !== 'api', 'Instagram API (only for method = API)', 'docs/INSTAGRAM.md')}</div>`;
+  $('#browser').onclick = async () => { await api('/browser', {}); toast('Browser opened: log in to Instagram'); };
+  $('#save').onclick = async () => {
+    const v = id => $('#' + id).value; const proof = v('b_proof').split('\n').map(l => l.trim()).filter(Boolean).map(l => { const [c, n] = l.split('='); return { claim: c.trim(), number: (n || '').trim() }; });
+    await api('/brand', { product: v('b_product'), audience: v('b_audience'), problem: v('b_problem'), cta: v('b_cta'), niche: v('b_niche'), tone: v('b_tone'), proof, competitors: v('b_comp').split(',').map(x => x.trim()).filter(Boolean), notify: $('#n_on').checked,
+      production: { style: v('p_style'), avatar: v('p_av'), voice: v('p_voice'), lang: v('p_lang') }, posting: { method: v('o_method'), mode: v('o_mode'), username: v('o_user'), trial: $('#o_trial').checked }, daily: { enabled: $('#d_on').checked, time: v('d_time'), minReferences: +v('d_min'), autopilot: $('#d_auto').checked, graceMinutes: +v('d_grace') } });
+    toast('Saved'); };
 }
 route();

@@ -54,3 +54,12 @@
 - Business Discovery: `GET /{ig-user-id}?fields=business_discovery.username(x){followers_count,media{like_count,comments_count,view_count,...}}`; read-only for Business/Creator accounts; `view_count` is the field for Business Discovery; like counts omitted if hidden; age-gated accounts not returned.
 - Trial reels: Content Publishing API `trial_params={"graduation_strategy":"MANUAL"|"SS_PERFORMANCE"}` per Meta's changelog (Nov 2025); sources disagree on API graduation and limits; reelkit uses MANUAL and leaves graduation to the app.
 - Insights: account `reach` supports `breakdown=follow_type` (follower/non-follower/unknown); metrics are moving from impressions to **views**; unsupported metric/breakdown combos return generic errors, so reelkit requests metrics one at a time and skips failures.
+
+
+## 8. v0.3 design notes (how Reelkit maps to what the vendor does, and where it differs)
+- **Claude as a controlled worker.** The vendor runs each reel as a Claude Code session in a sandbox and "writing/research" jobs with no tools in an empty folder. Reelkit does the same for text tasks (`--tools ""`, `--disable-slash-commands`, `--strict-mcp-config`, empty cwd) and adds per-task model routing, caching and budgets, because the stated goal is not to burn plan usage on small/easy work.
+- **Posting.** The vendor stores an Instagram token server-side so posts go out while the PC sleeps. Reelkit's default is local: Claude drives a dedicated Chrome (CDP) through Playwright MCP, so no Meta developer app is needed; the Graph API path remains as an option. Trade-off: automation of the web UI is fragile and against Meta's terms; the review-before-share gate is on by default.
+- **Reading data.** The vendor reads public Instagram pages locally (0.4.14) and creators' bios (0.4.16). Reelkit's `research` and web-insights tasks use the same idea via the logged-in dedicated browser (read-only prompts).
+- **Own footage.** The vendor cuts "word for word with filler words removed" (0.4.37, Macs first) using on-device transcription (0.4.52). Reelkit uses faster-whisper (verbatim prompt, ffmpeg-decoded audio) + a word classifier + a cut planner that compresses pauses, with a click-to-override transcript.
+- **Avatars.** The vendor offers HeyGen presenter videos. Reelkit adds free built-in vector presenters whose mouths follow the audio envelope; HeyGen is optional.
+- **Reliability.** Vendor: resume from saved work, ~3 h cap. Reelkit: per-scene render cache, durable runs/jobs, worker in a child process, gates that wait indefinitely for you.

@@ -2,6 +2,7 @@ import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
+import { createRequire } from 'node:module';
 
 export const isWin = process.platform === 'win32';
 export const isMac = process.platform === 'darwin';
@@ -43,3 +44,12 @@ export function findFont(bold = true) {
   return cands.find(f => fs.existsSync(f));
 }
 export const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'reelkit-'));
+
+/** If ffmpeg/ffprobe are not on PATH, use the npm-bundled binaries (ffmpeg-static, @ffprobe-installer/ffprobe) when installed. */
+export function ensureMediaTools() {
+  const add = dir => { process.env.PATH = dir + path.delimiter + process.env.PATH; };
+  const req = createRequire(import.meta.url);
+  try { if (!has('ffmpeg')) { const p = req('ffmpeg-static'); if (p && fs.existsSync(p)) add(path.dirname(p)); } } catch {}
+  try { if (!has('ffprobe')) { const p = req('@ffprobe-installer/ffprobe').path; if (p && fs.existsSync(p)) add(path.dirname(p)); } } catch {}
+  return has('ffmpeg') && has('ffprobe');
+}

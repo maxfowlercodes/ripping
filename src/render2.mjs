@@ -32,7 +32,7 @@ export function tokenize(text, lang) {
 }
 
 /** Make an in-page page object for rendering. */
-async function openStage(browser, k) {
+export async function openStage(browser, k) {
   const ctx = await browser.newContext({ viewport: { width: Math.round(1080 * k), height: Math.round(1920 * k) }, deviceScaleFactor: 1 });
   const page = await ctx.newPage();
   await page.goto(pathToFileURL(path.join(rootDir, 'render', 'stage.html')).href);

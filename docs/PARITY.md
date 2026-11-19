@@ -23,3 +23,19 @@
 | Mobile | home-screen web app | ✅ PWA over LAN with private token |
 | GPU/3D styles, cut-paper/clay/pixel-art etc. | yes | ⛔ (add as style plugins) |
 | Community, coaching, signed auto-updates, sandboxed Claude sessions | yes | ⛔ (git pull; scope Claude Code's permissions yourself, see README) |
+
+
+## v0.3 additions
+| Capability | Status |
+|---|---|
+| One-click Make & Post with durable, resumable runs and gates (brand, references, review-before-share, login) | ✅ real run verified (post step set to render-only) |
+| Claude model routing per task, Eco/Balanced/Quality, cache, budgets, usage ledger, cheap-first escalation | ✅ verified with real `claude -p` calls |
+| Claude operates the browser (post / insights / competitor research) | ✅ post flow verified on a local mock site (haiku, 2 calls) · ⛔ **not verified on real Instagram** |
+| Daily check-in (references, focus, ideas) + optional auto-run + notifications | ✅ check-in created by the worker; 🟡 OS notifications untested |
+| Motion v2: transitions, camera, grain, 9 new widgets, 10 new styles (30 total) | ✅ |
+| Built-in lip-synced presenters (founder/robot/blob) | ✅ (cartoon, not photoreal) |
+| HeyGen avatar | 🟡 API + chroma-key compositing; untested with a key |
+| Filler-word/stutter/pause cutting with transcript editor, captions in style | ✅ real speech, Whisper base.en · note Whisper may mishear "uh" |
+| Piper offline voices + Whisper-exact caption timing for any voice | ✅ |
+| Desktop app (Electron + tray + native notifications + start at login) | 🟡 written, **untested** (Electron download blocked here); no-install Edge/Chrome app window path ✅ logic, 🟡 on Windows |
+| Windows installer/shortcut scripts | 🟡 untested (no Windows machine) |

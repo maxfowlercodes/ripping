@@ -1,13 +1,17 @@
 {
   "name": "reelkit",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Free, local, Claude-Code-driven short-form video pipeline: research, script, voice, render, post, analyze, repurpose.",
   "type": "module",
   "bin": {
     "reelkit": "bin/reelkit.mjs"
   },
   "scripts": {
-    "test": "node --test test/*.test.mjs"
+    "test": "node --test test/*.test.mjs",
+    "start": "node bin/reelkit.mjs dashboard --open",
+    "app": "electron app/main.cjs",
+    "dist:win": "electron-builder --win nsis",
+    "dist:mac": "electron-builder --mac dmg"
   },
   "engines": {
     "node": ">=18"
@@ -15,5 +19,43 @@
   "license": "MIT",
   "dependencies": {
     "playwright-core": "^1.49.0"
+  },
+  "main": "app/main.cjs",
+  "optionalDependencies": {
+    "ffmpeg-static": "^5.2.0",
+    "@ffprobe-installer/ffprobe": "^2.1.2"
+  },
+  "devDependencies": {
+    "electron": "^33.0.0",
+    "electron-builder": "^25.0.0"
+  },
+  "build": {
+    "appId": "local.reelkit.app",
+    "productName": "Reelkit",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "app/**",
+      "bin/**",
+      "src/**",
+      "render/**",
+      "styles/**",
+      "web/**",
+      "package.json",
+      "node_modules/**"
+    ],
+    "asarUnpack": [
+      "node_modules/ffmpeg-static/**",
+      "node_modules/@ffprobe-installer/**"
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "app/icon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
   }
 }

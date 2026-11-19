@@ -50,3 +50,17 @@ export async function discover(account, usernames, niche = 'general') {
   }
   return n;
 }
+
+/** Paste-friendly intake: one reel per line:  url | views | baseline(optional) | caption (optional). Blank lines ignored. */
+export function addFromText(text, niche = 'general') {
+  let n = 0;
+  for (const raw of String(text).split(/\r?\n/)) {
+    const l = raw.trim(); if (!l) continue;
+    const parts = l.split('|').map(x => x.trim()); const url = parts[0].match(/https?:\/\/\S+/)?.[0] || '';
+    const num = x => { const m = String(x || '').toLowerCase().replace(/,/g, '').match(/([\d.]+)\s*([km])?/); return m ? Math.round(parseFloat(m[1]) * (m[2] === 'm' ? 1e6 : m[2] === 'k' ? 1e3 : 1)) : 0; };
+    const creator = url.match(/instagram\.com\/([\w.]+)\//)?.[1] || '';
+    const rec = addItem({ url, creator: creator === 'reel' || creator === 'p' ? '' : creator, views: num(parts[1]), baseline: num(parts[2]), caption: parts.slice(3).join(' | ') || (url ? '' : l), niche, source: 'paste' });
+    decide(rec.id, 'saved'); n++;
+  }
+  return n;
+}

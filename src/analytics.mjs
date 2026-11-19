@@ -1,5 +1,6 @@
 import { listReels, getMeta, saveMeta, scriptPath } from './store.mjs';
 import { mediaInsights } from './instagram.mjs';
+import { readInsights } from './computer.mjs';
 import { parseScript, lint } from './script.mjs';
 import fs from 'node:fs';
 
@@ -18,7 +19,7 @@ export function viewsAtDay(m, d) {
 export function rankFor(totalViews) { let r = 0; RANKS.forEach(([_, t], i) => { if (totalViews >= t) r = i; }); const next = RANKS[r + 1]; return { name: RANKS[r][0], index: r, total: totalViews, next: next ? { name: next[0], at: next[1] } : null }; }
 
 export function summary() {
-  const posted = listReels().filter(r => r.igMediaId);
+  const posted = listReels().filter(r => r.postedAt && (r.igMediaId || (r.snapshots || []).length));
   const rows = posted.map(r => { const s = latest(r); return { slug: r.slug, title: r.title, postedAt: r.postedAt, account: r.account, views: s?.views || 0, likes: s?.likes || 0, saves: s?.saved || 0, shares: s?.shares || 0, comments: s?.comments || 0, d1: viewsAtDay(r, 1), d3: viewsAtDay(r, 3), d7: viewsAtDay(r, 7), curve: (r.snapshots || []).map(x => ({ age: +((new Date(x.t) - new Date(r.postedAt)) / 864e5).toFixed(2), views: x.views })) }; });
   const med = median(rows.map(r => r.views));
   rows.forEach(r => { r.vsMedian = med ? +(r.views / med).toFixed(1) : null; r.winner = rows.length >= 3 ? r.views >= med * 1.5 && r.views === Math.max(...rows.map(x => x.views)) || r.vsMedian >= 2 : rows.length > 0 && r.views === Math.max(...rows.map(x => x.views)); });
@@ -47,4 +48,18 @@ export function calibrate() {
   const overall = spearman(rows.map(r => r.l.score), views);
   const per = rows[0].l.checks.map(c => { const id = c.id; const x = rows.map(r => (r.l.checks.find(k => k.id === id).pass ? 1 : 0)); return { id, rho: new Set(x).size > 1 ? +spearman(x, views).toFixed(2) : null }; });
   return { ready: true, n: rows.length, overallRho: +overall.toFixed(2), perCheck: per, note: 'rho near +1 means passing that check goes with more views for you. Small samples are noisy.' };
+}
+
+/** Snapshots for reels posted via the browser (no API): one Claude computer-use call for ALL due reels. */
+export async function snapshotDueWeb({ username, log = () => {} }) {
+  const due = listReels().filter(r => r.postedVia === 'computer' && r.postedAt).filter(r => {
+    const m = getMeta(r.slug); const age = ageDays(m); const taken = (m.snapshots || []).map(s => (new Date(s.t) - new Date(m.postedAt)) / 864e5);
+    return MILESTONES.some(d => age >= d && !taken.some(a => a >= d - 0.05 && a < d + Math.max(0.5, d * 0.3)));
+  });
+  if (!due.length) return 0;
+  const rows = await readInsights({ username, posts: due.map(r => ({ caption: (getMeta(r.slug).caption || r.title), postedAt: r.postedAt })), log });
+  let n = 0;
+  for (const r of due) { const cap = (getMeta(r.slug).caption || r.title).slice(0, 40).toLowerCase(); const hit = rows.find(x => cap.startsWith(String(x.match).slice(0, 30).toLowerCase()) || String(x.match).toLowerCase().startsWith(cap.slice(0, 30)));
+    if (!hit) continue; const m = getMeta(r.slug); m.snapshots = [...(m.snapshots || []), { t: new Date().toISOString(), views: hit.views, likes: hit.likes, comments: hit.comments, shares: hit.shares, saved: hit.saves, source: 'web' }]; saveMeta(r.slug, m); n++; }
+  return n;
 }

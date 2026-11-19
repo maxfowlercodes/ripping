@@ -6,9 +6,14 @@ import { home, ensureDir, readJson, writeJson } from './util.mjs';
 import { getMeta, saveMeta, scriptPath, reelDir } from './store.mjs';
 import { parseScript } from './script.mjs';
 import { renderReel2 } from './render2.mjs';
-import { snapshotDue } from './analytics.mjs';
+import { snapshotDue, snapshotDueWeb } from './analytics.mjs';
+import { getBrand } from './brand.mjs';
+import { cutFootage } from './footage.mjs';
+import { captionFootage } from './footagecap.mjs';
 import { publishReel } from './instagram.mjs';
 import { listReels } from './store.mjs';
+import { pumpRuns } from './autopilot.mjs';
+import { dailyTick } from './daily.mjs';
 
 const dir = () => ensureDir(path.join(home(), 'jobs'));
 const jf = id => path.join(dir(), id + '.json');
@@ -28,10 +33,19 @@ export async function runJob(j) {
       const r = await renderReel2({ script: sc, style: st, voice: voice || 'auto', lang: lang || m.lang || 'en', music: music || m.music, out, draft: !!draft, avatarFile, workDir: path.join(reelDir(slug), 'work'), onLog: log,
         onProgress: ({ stage, done, total }) => { j.stage = stage; j.progress = +(((stage === 'voice' ? 0 : 0.2) + (done / total) * (stage === 'voice' ? 0.2 : 0.8)).toFixed(2)); writeJson(jf(j.id), j); } });
       const m2 = getMeta(slug); Object.assign(m2, { durations: r.durations, seconds: r.seconds, style: st, lang: lang || m2.lang || 'en', rendered: new Date().toISOString() }); if (!draft && m2.status !== 'posted' && m2.status !== 'scheduled') m2.status = 'rendered'; saveMeta(slug, m2);
+    } else if (j.type === 'footage-analyze') {
+      const { file, level, lang, model, planFile } = j.payload; log('transcribing (first run downloads the model)...');
+      const plan = cutFootage({ input: file, level, lang, model, dryRun: true }); writeJson(planFile, plan); log(`${plan.removed}/${plan.total} words flagged`);
+    } else if (j.type === 'footage-render') {
+      const { file, level, lang, model, style, captions, overrides, out, planFile } = j.payload; const cut = out.replace(/\.mp4$/, '.cut.mp4');
+      const given = readJson(planFile, null)?.words?.map(w => ({ t: w.t, s: w.s, e: w.e }));
+      const p = cutFootage({ input: file, out: cut, level, lang, model, overrides, words: given, log });
+      if (captions) { log('captioning...'); await captionFootage({ video: cut, words: p.captionWords, style: style || 'volt', out, lang }); } else fs.copyFileSync(cut, out);
+      log(`done: ${p.duration}s -> ${p.after}s`);
     } else if (j.type === 'post') {
       const m = getMeta(j.payload.slug); const id = await publishReel({ account: m.account, file: path.join(reelDir(j.payload.slug), 'reel.mp4'), caption: m.caption || m.title, trial: m.trial, log });
       Object.assign(m, { igMediaId: id, status: 'posted', postedAt: new Date().toISOString() }); saveMeta(j.payload.slug, m);
-    } else if (j.type === 'analyze') { const n = await snapshotDue(log); log(`${n} snapshots`); }
+    } else if (j.type === 'analyze') { const n = await snapshotDue(log).catch(() => 0); log(`${n} snapshots`); const u = getBrand().posting.username; if (u) { const w = await snapshotDueWeb({ username: u, log }); log(`${w} web snapshots`); } }
     upd(j, { status: 'done', progress: 1, finished: new Date().toISOString() });
   } catch (e) { log('ERROR ' + e.message); upd(j, { status: 'failed', error: e.message }); }
 }
@@ -53,6 +67,7 @@ export function enqueueDue() {
 }
 export function startWorker({ intervalMs = 3000, analyzeEveryMs = 3600e3 } = {}) {
   let lastA = 0;
-  const t = setInterval(async () => { enqueueDue(); await tick(); if (Date.now() - lastA > analyzeEveryMs) { lastA = Date.now(); if (process.env.IG_ACCESS_TOKEN || listReels().some(r => r.igMediaId)) enqueue('analyze', {}); } }, intervalMs);
+  let dailyBusy = false;
+  const t = setInterval(async () => { enqueueDue(); await tick(); await pumpRuns().catch(() => {}); if (!dailyBusy) { dailyBusy = true; dailyTick().catch(() => {}).finally(() => (dailyBusy = false)); } if (Date.now() - lastA > analyzeEveryMs) { lastA = Date.now(); if (process.env.IG_ACCESS_TOKEN || listReels().some(r => r.igMediaId)) enqueue('analyze', {}); } }, intervalMs);
   return () => clearInterval(t);
 }
