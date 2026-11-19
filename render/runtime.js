@@ -79,6 +79,7 @@
     const avLayer = hasAvatar ? h('div', { position: 'absolute', left: 0, top: 0, width: W + 'px', height: H + 'px' }, stage) : null;
     const capLayer = h('div', { position: 'absolute', left: 0, top: 0, width: W + 'px', height: H + 'px' }, stage);
     const bar = cfg.progressBar === false || overlay ? null : h('div', { position: 'absolute', left: 0, top: 0, height: '8px', width: 0, background: C.accent, opacity: 0.9 }, root);
+    if (cfg.letterbox && !overlay) { ['top', 'bottom'].forEach(k => h('div', { position: 'absolute', left: 0, right: 0, [k]: 0, height: cfg.letterbox + 'px', background: '#000' }, root)); }
     const trEl = h('div', { position: 'absolute', inset: 0, pointerEvents: 'none', opacity: 0 }, root);
     const zones = Object.assign({}, hasAvatar ? { capTop: 800, capH: 270, visTop: 150, visH: 640, capTopFree: 230, capHFree: 640 } : {}, overlay ? { capTopFree: spec.overlayTop ?? 1040, capHFree: 360 } : {}, cfg.zones || {});
     const capSize = (hasVis) => (hasAvatar ? (hasVis ? 84 : 112) : overlay ? 92 : (hasVis ? cfg.caption.sizeVis : cfg.caption.size)) || 84;
@@ -97,7 +98,7 @@
         textTransform: cfg.caption.upper ? 'uppercase' : 'none', textShadow: overlay ? '0 4px 24px rgba(0,0,0,.65), 0 0 3px rgba(0,0,0,.8)' : (cfg.caption.shadow || 'none'), wordBreak: 'break-word',
       }, capBox);
       const words = b.words.map(w => {
-        const sp = h('span', { display: 'inline-block', opacity: 0, margin: ['ja', 'zh', 'th'].includes(spec.lang) ? '0' : '0 .11em', padding: '0 .06em', borderRadius: '.14em', whiteSpace: 'pre' }, line, w.t);
+        const sp = h('span', { display: 'inline-block', opacity: 0, margin: ['ja', 'zh', 'th'].includes(spec.lang) ? '0' : (cfg.caption.pill ? '.06em .1em' : '0 .11em'), padding: cfg.caption.pill ? '.04em .3em' : '0 .06em', borderRadius: cfg.caption.pill ? '.5em' : '.14em', whiteSpace: 'pre', backgroundColor: cfg.caption.pill ? (C.pill || 'rgba(0,0,0,.72)') : 'transparent', color: cfg.caption.pill ? (C.pillFg || C.fg) : '' }, line, w.t);
         if (w.key) {
           const ke = cfg.key || 'highlight';
           if (ke === 'highlight') { sp.style.backgroundImage = `linear-gradient(${C.accent},${C.accent})`; sp.style.backgroundRepeat = 'no-repeat'; sp.style.backgroundSize = '0% 100%'; sp.style.backgroundPosition = spec.rtl ? 'right' : 'left'; sp.dataset.ke = 'h'; }
@@ -145,11 +146,13 @@
           let p, vis = 1;
           if (mode === 'oneword') { const on = t >= w.s && (k === o.words.length - 1 ? true : t < o.words[k + 1].w.s); vis = on ? 1 : 0; p = clamp((t - w.s) / 0.12); sp.style.display = on ? 'inline-block' : 'none'; }
           else if (mode === 'block') { p = clamp(local / 0.3); vis = 1; }
+          else if (mode === 'karaoke') { p = clamp(local / 0.25); vis = 1; }
           else { p = clamp((t - w.s) / 0.16); vis = t >= w.s - 0.001 ? 1 : 0; }
           const e = ease.back(p);
           sp.style.opacity = vis ? clamp(p * 1.6) : 0;
-          const sc2 = mode === 'oneword' ? 0.8 + 0.2 * e : 0.7 + 0.3 * e;
-          sp.style.transform = `translateY(${(1 - e) * 26}px) scale(${sc2})`;
+          if (mode === 'karaoke') { const on = t >= w.s && t < w.e + 0.12; sp.style.opacity = t >= w.s ? 1 : 0.3; if (!sp.dataset.ke) sp.style.color = on ? C.accent : C.fg; }
+          const sc2 = mode === 'oneword' ? 0.8 + 0.2 * e : mode === 'karaoke' ? (t >= w.s && t < w.e + 0.12 ? 1.06 : 1) : 0.7 + 0.3 * e;
+          sp.style.transform = mode === 'karaoke' ? `scale(${sc2})` : `translateY(${(1 - e) * 26}px) scale(${sc2})`;
           const ke = sp.dataset.ke;
           if (ke === 'h') { const kp = ease.out(clamp((t - w.s - 0.05) / 0.28)); sp.style.backgroundSize = (kp * 100) + '% 100%'; sp.style.color = kp > 0.4 ? lastKeyColor : ''; }
         });
@@ -248,6 +251,47 @@
       layer.style.background = `linear-gradient(180deg, ${C.bg1}, ${C.bg2})`; const g1 = RK.h('div', { position: 'absolute', inset: '-100px', backgroundImage: `linear-gradient(${C.dot} 2px, transparent 2px), linear-gradient(90deg, ${C.dot} 2px, transparent 2px)`, backgroundSize: '60px 60px' }, layer);
       const g2 = RK.h('div', { position: 'absolute', inset: '-100px', backgroundImage: `linear-gradient(${C.dot} 5px, transparent 5px), linear-gradient(90deg, ${C.dot} 5px, transparent 5px)`, backgroundSize: '300px 300px', opacity: 0.7 }, layer);
       return t => { g1.style.transform = g2.style.transform = `translate(${(t * 8) % 60}px, ${(t * 8) % 60}px)`; };
+    },
+
+    waves(layer, cfg, C) {
+      layer.style.background = `linear-gradient(180deg, ${C.bg1}, ${C.bg2})`;
+      const sv = RK.svg('svg', { width: 1080, height: 1920, viewBox: '0 0 1080 1920' }, layer); sv.style.position = 'absolute'; sv.style.left = 0; sv.style.top = 0;
+      const cols = [C.accent, C.accent2 || C.accent, C.ribbon1 || C.fg]; const ps = cols.map((c, i) => RK.svg('path', { fill: c, opacity: 0.16 + i * 0.06 }, sv));
+      return t => ps.forEach((p, i) => { let d = `M0 1920 L0 ${1180 + i * 150}`; for (let x = 0; x <= 1080; x += 40) d += ` L${x} ${1180 + i * 150 + Math.sin(x / 170 + t * (0.7 + i * 0.25) + i) * (46 - i * 8)}`; p.setAttribute('d', d + ' L1080 1920 Z'); });
+    },
+    synthwave(layer, cfg, C) {
+      layer.style.background = `linear-gradient(180deg, ${C.bg1} 0%, ${C.bg2} 52%, ${C.bg1} 52%)`;
+      const sun = RK.h('div', { position: 'absolute', left: '240px', top: '560px', width: '600px', height: '600px', borderRadius: '50%', background: `linear-gradient(180deg, ${C.accent2 || '#fde047'}, ${C.accent})`, WebkitMaskImage: 'repeating-linear-gradient(180deg,#000 0,#000 30px,transparent 30px,transparent 38px)', clipPath: 'inset(0 0 40% 0)' }, layer);
+      const floor = RK.h('div', { position: 'absolute', left: '-60%', right: '-60%', top: '1000px', height: '1500px', transformOrigin: '50% 0', transform: 'perspective(700px) rotateX(68deg)', backgroundImage: `linear-gradient(${C.accent} 3px, transparent 3px), linear-gradient(90deg, ${C.accent} 3px, transparent 3px)`, backgroundSize: '110px 110px', opacity: 0.8 }, layer);
+      return t => { floor.style.backgroundPosition = `0 ${(t * 90) % 110}px`; };
+    },
+    confetti(layer, cfg, C) {
+      layer.style.background = `linear-gradient(180deg, ${C.bg1}, ${C.bg2})`; const r = RK.rng(21); const cols = [C.accent, C.accent2 || C.fg, C.ribbon1 || C.bg2, '#ffffff'];
+      const bits = [...Array(54)].map(() => { const b = { x: r() * 1080, y: r() * 2000, v: 70 + r() * 110, w: 14 + r() * 22, h: 8 + r() * 14, ph: r() * 6.28, rot: r() * 360 }; b.el = RK.h('div', { position: 'absolute', width: b.w + 'px', height: b.h + 'px', background: cols[Math.floor(r() * cols.length)], borderRadius: r() > 0.6 ? '50%' : '3px' }, layer); return b; });
+      return t => bits.forEach(b => { b.el.style.transform = `translate(${b.x + Math.sin(t * 1.3 + b.ph) * 40}px, ${((b.y + t * b.v) % 2000) - 40}px) rotate(${b.rot + t * 140}deg)`; });
+    },
+    checker(layer, cfg, C) {
+      layer.style.background = C.bg1; const e = RK.h('div', { position: 'absolute', inset: '-320px', backgroundImage: `conic-gradient(${C.bg2} 25%, transparent 0 50%, ${C.bg2} 0 75%, transparent 0)`, backgroundSize: '240px 240px' }, layer);
+      return t => { e.style.transform = `translate(${(t * 60) % 240}px, ${(t * 60) % 240}px)`; };
+    },
+    rays(layer, cfg, C) {
+      layer.style.background = C.bg1; const e = RK.h('div', { position: 'absolute', left: '-60%', top: '-30%', width: '220%', height: '170%', backgroundImage: `repeating-conic-gradient(from 0deg at 50% 38%, ${C.bg2} 0deg 7.5deg, transparent 7.5deg 15deg)`, transformOrigin: '50% 38%' }, layer);
+      RK.h('div', { position: 'absolute', inset: 0, background: `radial-gradient(60% 45% at 50% 38%, ${C.accent}55, transparent 70%)` }, layer);
+      return t => { e.style.transform = `rotate(${t * 6}deg)`; };
+    },
+    bokeh(layer, cfg, C) {
+      layer.style.background = `linear-gradient(160deg, ${C.bg1}, ${C.bg2})`; const r = RK.rng(33); const cols = [C.accent, C.accent2 || C.fg, C.ribbon1 || C.accent];
+      const bs = [...Array(22)].map(() => { const b = { x: r() * 1080, y: r() * 1920, s: 120 + r() * 340, ph: r() * 6.28, sp: 0.2 + r() * 0.5, c: cols[Math.floor(r() * cols.length)] }; b.el = RK.h('div', { position: 'absolute', width: b.s + 'px', height: b.s + 'px', borderRadius: '50%', background: `radial-gradient(circle, ${b.c}66, ${b.c}00 68%)` }, layer); return b; });
+      return t => bs.forEach(b => { b.el.style.transform = `translate(${b.x - b.s / 2 + Math.sin(t * b.sp + b.ph) * 60}px, ${b.y - b.s / 2 + Math.cos(t * b.sp * 0.8 + b.ph) * 80}px)`; b.el.style.opacity = 0.55 + 0.4 * Math.sin(t * 0.7 + b.ph); });
+    },
+    matrix(layer, cfg, C) {
+      layer.style.background = C.bg1; const r = RK.rng(77); const chars = '01アイウエオカキクケコサシスセソ{}<>/=+*#';
+      const cols = [...Array(22)].map((_, i) => { const len = 26 + Math.floor(r() * 20); let txt = ''; for (let k = 0; k < len; k++) txt += chars[Math.floor(r() * chars.length)] + '\n'; const c = { x: i * 50 + 6, v: 120 + r() * 260, off: r() * 2000 }; c.el = RK.h('div', { position: 'absolute', left: c.x + 'px', top: 0, whiteSpace: 'pre', fontFamily: 'ui-monospace,Menlo,Consolas,monospace', fontSize: '40px', lineHeight: '48px', color: C.accent, opacity: 0.38, textShadow: `0 0 12px ${C.accent}`, WebkitMaskImage: 'linear-gradient(180deg, transparent, #000 60%, transparent)' }, layer, txt); return c; });
+      return t => cols.forEach(c => { c.el.style.transform = `translateY(${((c.off + t * c.v) % 3000) - 1100}px)`; });
+    },
+    halftone(layer, cfg, C) {
+      layer.style.background = C.bg1; const d = RK.h('div', { position: 'absolute', inset: '-60px', backgroundImage: `radial-gradient(${C.bg2} 38%, transparent 40%)`, backgroundSize: '44px 44px', WebkitMaskImage: 'linear-gradient(160deg, #000, transparent 75%)' }, layer);
+      return t => { d.style.transform = `translate(${(t * 10) % 44}px, ${(t * 10) % 44}px)`; };
     },
     flat(layer, cfg, C) { layer.style.background = C.bg1; return () => {}; },
   };

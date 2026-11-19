@@ -1,0 +1,1165 @@
+{
+ "aurora-dark": {
+  "name": "aurora-dark",
+  "desc": "Violet-to-peach ribbon on deep navy, highlighter key words",
+  "tags": {
+   "mood": [
+    "friendly",
+    "techy"
+   ],
+   "niches": [
+    "saas",
+    "dev-tools",
+    "creator",
+    "b2b"
+   ],
+   "energy": 3,
+   "tone": "dark"
+  },
+  "bg": "ribbon",
+  "captionMode": "words",
+  "key": "highlight",
+  "transition": "zoom",
+  "presenter": false,
+  "glass": false
+ },
+ "aurora-light": {
+  "name": "aurora-light",
+  "desc": "Same ribbon on a bright ground",
+  "tags": {
+   "mood": [
+    "friendly",
+    "calm"
+   ],
+   "niches": [
+    "saas",
+    "coaching",
+    "education",
+    "b2b"
+   ],
+   "energy": 3,
+   "tone": "light"
+  },
+  "bg": "ribbon",
+  "captionMode": "words",
+  "key": "highlight",
+  "transition": "zoom",
+  "presenter": false,
+  "glass": false
+ },
+ "orbit-dark": {
+  "name": "orbit-dark",
+  "desc": "Near-black with a lunar rim of light, gradient key words",
+  "tags": {
+   "mood": [
+    "techy",
+    "serious"
+   ],
+   "niches": [
+    "dev-tools",
+    "saas",
+    "fintech",
+    "b2b"
+   ],
+   "energy": 3,
+   "tone": "dark"
+  },
+  "bg": "rim",
+  "captionMode": "words",
+  "key": "gradient",
+  "transition": "flash",
+  "presenter": false,
+  "glass": false
+ },
+ "orbit-light": {
+  "name": "orbit-light",
+  "desc": "Near-black with a lunar rim of light, gradient key words",
+  "tags": {
+   "mood": [
+    "techy",
+    "calm"
+   ],
+   "niches": [
+    "dev-tools",
+    "saas",
+    "b2b"
+   ],
+   "energy": 3,
+   "tone": "light"
+  },
+  "bg": "rim",
+  "captionMode": "words",
+  "key": "gradient",
+  "transition": "flash",
+  "presenter": false,
+  "glass": false
+ },
+ "mint-ledger": {
+  "name": "mint-ledger",
+  "desc": "Fintech calm: mint dot-grid, green highlighter",
+  "tags": {
+   "mood": [
+    "calm",
+    "serious"
+   ],
+   "niches": [
+    "fintech",
+    "b2b",
+    "legal",
+    "real-estate"
+   ],
+   "energy": 2,
+   "tone": "light"
+  },
+  "bg": "dots",
+  "captionMode": "words",
+  "key": "highlight",
+  "transition": "flash",
+  "presenter": false,
+  "glass": false
+ },
+ "mint-ledger-dark": {
+  "name": "mint-ledger-dark",
+  "desc": "Fintech calm: mint dot-grid, green highlighter",
+  "tags": {
+   "mood": [
+    "calm",
+    "techy"
+   ],
+   "niches": [
+    "fintech",
+    "crypto",
+    "saas"
+   ],
+   "energy": 2,
+   "tone": "dark"
+  },
+  "bg": "grid",
+  "captionMode": "words",
+  "key": "highlight",
+  "transition": "flash",
+  "presenter": false,
+  "glass": false
+ },
+ "volt": {
+  "name": "volt",
+  "desc": "Kinetic type: one huge word at a time, black and yellow",
+  "tags": {
+   "mood": [
+    "bold",
+    "energetic"
+   ],
+   "niches": [
+    "creator",
+    "gaming",
+    "fitness",
+    "ecommerce"
+   ],
+   "energy": 5,
+   "tone": "dark"
+  },
+  "bg": "flat",
+  "captionMode": "oneword",
+  "key": "color",
+  "transition": "flash",
+  "presenter": false,
+  "glass": false
+ },
+ "volt-pink": {
+  "name": "volt-pink",
+  "desc": "Kinetic type: one huge word at a time, black and yellow",
+  "tags": {
+   "mood": [
+    "bold",
+    "energetic",
+    "playful"
+   ],
+   "niches": [
+    "creator",
+    "ecommerce",
+    "fitness"
+   ],
+   "energy": 5,
+   "tone": "dark"
+  },
+  "bg": "flat",
+  "captionMode": "oneword",
+  "key": "color",
+  "transition": "flash",
+  "presenter": false,
+  "glass": false
+ },
+ "newsroom": {
+  "name": "newsroom",
+  "desc": "Breaking-news desk with ticker",
+  "tags": {
+   "mood": [
+    "serious",
+    "dramatic"
+   ],
+   "niches": [
+    "b2b",
+    "legal",
+    "nonprofit",
+    "education"
+   ],
+   "energy": 4,
+   "tone": "dark"
+  },
+  "bg": "news",
+  "captionMode": "block",
+  "key": "underline",
+  "transition": "wipe",
+  "presenter": false,
+  "glass": false
+ },
+ "paper": {
+  "name": "paper",
+  "desc": "Cream paper with editorial serif",
+  "tags": {
+   "mood": [
+    "cozy",
+    "serious"
+   ],
+   "niches": [
+    "education",
+    "coaching",
+    "creator"
+   ],
+   "energy": 2,
+   "tone": "light"
+  },
+  "bg": "paper",
+  "captionMode": "block",
+  "key": "underline",
+  "transition": "slide",
+  "presenter": false,
+  "glass": false
+ },
+ "paper-ink": {
+  "name": "paper-ink",
+  "desc": "Cream paper with editorial serif",
+  "tags": {
+   "mood": [
+    "cozy",
+    "dramatic"
+   ],
+   "niches": [
+    "education",
+    "creator"
+   ],
+   "energy": 2,
+   "tone": "dark"
+  },
+  "bg": "paper",
+  "captionMode": "block",
+  "key": "underline",
+  "transition": "slide",
+  "presenter": false,
+  "glass": false
+ },
+ "terminal": {
+  "name": "terminal",
+  "desc": "Developer terminal, phosphor green",
+  "tags": {
+   "mood": [
+    "techy",
+    "retro"
+   ],
+   "niches": [
+    "dev-tools",
+    "saas"
+   ],
+   "energy": 3,
+   "tone": "dark"
+  },
+  "bg": "grid",
+  "captionMode": "words",
+  "key": "highlight",
+  "transition": "slide",
+  "presenter": false,
+  "glass": false
+ },
+ "terminal-amber": {
+  "name": "terminal-amber",
+  "desc": "Developer terminal, phosphor green",
+  "tags": {
+   "mood": [
+    "techy",
+    "retro"
+   ],
+   "niches": [
+    "dev-tools"
+   ],
+   "energy": 3,
+   "tone": "dark"
+  },
+  "bg": "grid",
+  "captionMode": "words",
+  "key": "highlight",
+  "transition": "slide",
+  "presenter": false,
+  "glass": false
+ },
+ "sunset": {
+  "name": "sunset",
+  "desc": "Warm sunset gradient",
+  "tags": {
+   "mood": [
+    "friendly",
+    "playful"
+   ],
+   "niches": [
+    "creator",
+    "coaching",
+    "ecommerce"
+   ],
+   "energy": 3,
+   "tone": "dark"
+  },
+  "bg": "gradient",
+  "captionMode": "words",
+  "key": "highlight",
+  "transition": "slide",
+  "presenter": false,
+  "glass": false
+ },
+ "ocean": {
+  "name": "ocean",
+  "desc": "Warm sunset gradient",
+  "tags": {
+   "mood": [
+    "calm",
+    "friendly"
+   ],
+   "niches": [
+    "coaching",
+    "health",
+    "saas"
+   ],
+   "energy": 2,
+   "tone": "dark"
+  },
+  "bg": "gradient",
+  "captionMode": "words",
+  "key": "highlight",
+  "transition": "slide",
+  "presenter": false,
+  "glass": false
+ },
+ "swiss-red": {
+  "name": "swiss-red",
+  "desc": "Swiss poster: flush-left bold upper-case",
+  "tags": {
+   "mood": [
+    "bold",
+    "serious"
+   ],
+   "niches": [
+    "agency",
+    "b2b",
+    "creator"
+   ],
+   "energy": 4,
+   "tone": "light"
+  },
+  "bg": "swiss",
+  "captionMode": "words",
+  "key": "highlight",
+  "transition": "slide",
+  "presenter": false,
+  "glass": false
+ },
+ "swiss-blue": {
+  "name": "swiss-blue",
+  "desc": "Swiss poster: flush-left bold upper-case",
+  "tags": {
+   "mood": [
+    "serious",
+    "minimal"
+   ],
+   "niches": [
+    "agency",
+    "b2b",
+    "fintech"
+   ],
+   "energy": 3,
+   "tone": "light"
+  },
+  "bg": "swiss",
+  "captionMode": "words",
+  "key": "highlight",
+  "transition": "slide",
+  "presenter": false,
+  "glass": false
+ },
+ "vhs": {
+  "name": "vhs",
+  "desc": "Scanlines and glow",
+  "tags": {
+   "mood": [
+    "retro",
+    "playful"
+   ],
+   "niches": [
+    "gaming",
+    "creator",
+    "ecommerce"
+   ],
+   "energy": 4,
+   "tone": "dark"
+  },
+  "bg": "scan",
+  "captionMode": "words",
+  "key": "gradient",
+  "transition": "glitch",
+  "presenter": false,
+  "glass": false
+ },
+ "clean-white": {
+  "name": "clean-white",
+  "desc": "Minimal white",
+  "tags": {
+   "mood": [
+    "minimal",
+    "calm"
+   ],
+   "niches": [
+    "saas",
+    "b2b",
+    "education"
+   ],
+   "energy": 2,
+   "tone": "light"
+  },
+  "bg": "flat",
+  "captionMode": "words",
+  "key": "highlight",
+  "transition": "flash",
+  "presenter": false,
+  "glass": false
+ },
+ "clean-black": {
+  "name": "clean-black",
+  "desc": "Minimal white",
+  "tags": {
+   "mood": [
+    "minimal",
+    "serious"
+   ],
+   "niches": [
+    "saas",
+    "dev-tools"
+   ],
+   "energy": 2,
+   "tone": "dark"
+  },
+  "bg": "flat",
+  "captionMode": "words",
+  "key": "highlight",
+  "transition": "flash",
+  "presenter": false,
+  "glass": false
+ },
+ "mesh-glow": {
+  "name": "mesh-glow",
+  "desc": "Drifting colour-mesh glow, gradient key words, wipe transitions",
+  "tags": {
+   "mood": [
+    "friendly",
+    "techy"
+   ],
+   "niches": [
+    "saas",
+    "creator",
+    "ai"
+   ],
+   "energy": 3,
+   "tone": "dark"
+  },
+  "bg": "mesh",
+  "captionMode": "words",
+  "key": "gradient",
+  "transition": "wipe",
+  "presenter": false,
+  "glass": false
+ },
+ "neon-night": {
+  "name": "neon-night",
+  "desc": "Floating particles, neon highlighter, glitch cuts",
+  "tags": {
+   "mood": [
+    "energetic",
+    "techy"
+   ],
+   "niches": [
+    "gaming",
+    "creator",
+    "saas"
+   ],
+   "energy": 4,
+   "tone": "dark"
+  },
+  "bg": "particles",
+  "captionMode": "words",
+  "key": "highlight",
+  "transition": "glitch",
+  "presenter": false,
+  "glass": false
+ },
+ "bold-stripes": {
+  "name": "bold-stripes",
+  "desc": "Sports-broadcast stripes, flash cuts, upper-case",
+  "tags": {
+   "mood": [
+    "bold",
+    "energetic"
+   ],
+   "niches": [
+    "ecommerce",
+    "fitness",
+    "local-business"
+   ],
+   "energy": 5,
+   "tone": "light"
+  },
+  "bg": "stripes",
+  "captionMode": "words",
+  "key": "highlight",
+  "transition": "flash",
+  "presenter": false,
+  "glass": false
+ },
+ "spotlight": {
+  "name": "spotlight",
+  "desc": "Stage spotlight on black, warm underline key words",
+  "tags": {
+   "mood": [
+    "dramatic",
+    "serious"
+   ],
+   "niches": [
+    "coaching",
+    "creator",
+    "legal"
+   ],
+   "energy": 2,
+   "tone": "dark"
+  },
+  "bg": "spotlight",
+  "captionMode": "words",
+  "key": "underline",
+  "transition": "zoom",
+  "presenter": false,
+  "glass": false
+ },
+ "blueprint": {
+  "name": "blueprint",
+  "desc": "Technical blueprint grid, mono caption, typed feel",
+  "tags": {
+   "mood": [
+    "techy",
+    "serious"
+   ],
+   "niches": [
+    "dev-tools",
+    "b2b",
+    "real-estate"
+   ],
+   "energy": 3,
+   "tone": "dark"
+  },
+  "bg": "blueprint",
+  "captionMode": "words",
+  "key": "highlight",
+  "transition": "wipe",
+  "presenter": false,
+  "glass": false
+ },
+ "chat-pop": {
+  "name": "chat-pop",
+  "desc": "Pastel candy with big chat bubbles",
+  "tags": {
+   "mood": [
+    "playful",
+    "friendly"
+   ],
+   "niches": [
+    "ecommerce",
+    "coaching",
+    "kids"
+   ],
+   "energy": 4,
+   "tone": "light"
+  },
+  "bg": "gradient",
+  "captionMode": "words",
+  "key": "highlight",
+  "transition": "zoom",
+  "presenter": false,
+  "glass": false
+ },
+ "presenter-night": {
+  "name": "presenter-night",
+  "desc": "Animated presenter (free, lip-synced) over a mesh glow",
+  "tags": {
+   "mood": [
+    "friendly",
+    "techy"
+   ],
+   "niches": [
+    "saas",
+    "creator",
+    "ai"
+   ],
+   "energy": 3,
+   "tone": "dark"
+  },
+  "bg": "mesh",
+  "captionMode": "words",
+  "key": "highlight",
+  "transition": "wipe",
+  "presenter": true,
+  "glass": false
+ },
+ "presenter-day": {
+  "name": "presenter-day",
+  "desc": "Animated presenter on a bright ribbon",
+  "tags": {
+   "mood": [
+    "friendly",
+    "calm"
+   ],
+   "niches": [
+    "coaching",
+    "saas",
+    "education"
+   ],
+   "energy": 3,
+   "tone": "light"
+  },
+  "bg": "ribbon",
+  "captionMode": "words",
+  "key": "highlight",
+  "transition": "zoom",
+  "presenter": true,
+  "glass": false
+ },
+ "presenter-bot": {
+  "name": "presenter-bot",
+  "desc": "Robot presenter, terminal vibes",
+  "tags": {
+   "mood": [
+    "techy",
+    "playful"
+   ],
+   "niches": [
+    "dev-tools",
+    "ai",
+    "saas"
+   ],
+   "energy": 3,
+   "tone": "dark"
+  },
+  "bg": "grid",
+  "captionMode": "words",
+  "key": "highlight",
+  "transition": "wipe",
+  "presenter": true,
+  "glass": false
+ },
+ "presenter-blob": {
+  "name": "presenter-blob",
+  "desc": "Friendly blob mascot presenter",
+  "tags": {
+   "mood": [
+    "friendly",
+    "playful"
+   ],
+   "niches": [
+    "kids",
+    "education",
+    "ecommerce"
+   ],
+   "energy": 3,
+   "tone": "light"
+  },
+  "bg": "gradient",
+  "captionMode": "words",
+  "key": "highlight",
+  "transition": "zoom",
+  "presenter": true,
+  "glass": false
+ },
+ "synthwave": {
+  "name": "synthwave",
+  "desc": "Retro sun and neon grid floor",
+  "tags": {
+   "mood": [
+    "retro",
+    "energetic"
+   ],
+   "niches": [
+    "gaming",
+    "creator"
+   ],
+   "energy": 4,
+   "tone": "dark"
+  },
+  "bg": "synthwave",
+  "captionMode": "words",
+  "key": "gradient",
+  "transition": "glitch",
+  "presenter": false,
+  "glass": false
+ },
+ "sunrise-waves": {
+  "name": "sunrise-waves",
+  "desc": "Warm gradient with slow layered waves",
+  "tags": {
+   "mood": [
+    "warm",
+    "friendly"
+   ],
+   "niches": [
+    "coaching",
+    "health",
+    "food",
+    "local-business"
+   ],
+   "energy": 2,
+   "tone": "light"
+  },
+  "bg": "waves",
+  "captionMode": "words",
+  "key": "highlight",
+  "transition": "wipe",
+  "presenter": false,
+  "glass": false
+ },
+ "ocean-waves": {
+  "name": "ocean-waves",
+  "desc": "Cool blue waves, calm and trustworthy",
+  "tags": {
+   "mood": [
+    "calm",
+    "serious"
+   ],
+   "niches": [
+    "health",
+    "fintech",
+    "coaching",
+    "legal"
+   ],
+   "energy": 2,
+   "tone": "light"
+  },
+  "bg": "waves",
+  "captionMode": "words",
+  "key": "underline",
+  "transition": "zoom",
+  "presenter": false,
+  "glass": false
+ },
+ "confetti-party": {
+  "name": "confetti-party",
+  "desc": "Falling confetti, loud and happy",
+  "tags": {
+   "mood": [
+    "playful",
+    "energetic"
+   ],
+   "niches": [
+    "kids",
+    "ecommerce",
+    "creator",
+    "events"
+   ],
+   "energy": 5,
+   "tone": "dark"
+  },
+  "bg": "confetti",
+  "captionMode": "words",
+  "key": "highlight",
+  "transition": "zoom",
+  "presenter": false,
+  "glass": false
+ },
+ "pop-halftone": {
+  "name": "pop-halftone",
+  "desc": "Comic pop-art halftone, shouty upper-case",
+  "tags": {
+   "mood": [
+    "bold",
+    "energetic",
+    "playful"
+   ],
+   "niches": [
+    "ecommerce",
+    "fitness",
+    "local-business"
+   ],
+   "energy": 5,
+   "tone": "light"
+  },
+  "bg": "halftone",
+  "captionMode": "words",
+  "key": "highlight",
+  "transition": "flash",
+  "presenter": false,
+  "glass": false
+ },
+ "checker-bold": {
+  "name": "checker-bold",
+  "desc": "Black/white checkerboard with pill captions",
+  "tags": {
+   "mood": [
+    "bold",
+    "energetic"
+   ],
+   "niches": [
+    "creator",
+    "ecommerce",
+    "fitness"
+   ],
+   "energy": 4,
+   "tone": "light"
+  },
+  "bg": "checker",
+  "captionMode": "words",
+  "key": "highlight",
+  "transition": "flash",
+  "presenter": false,
+  "glass": false
+ },
+ "sunburst": {
+  "name": "sunburst",
+  "desc": "Rotating sunburst rays, game-show energy",
+  "tags": {
+   "mood": [
+    "bold",
+    "energetic"
+   ],
+   "niches": [
+    "ecommerce",
+    "local-business",
+    "fitness",
+    "events"
+   ],
+   "energy": 5,
+   "tone": "dark"
+  },
+  "bg": "rays",
+  "captionMode": "words",
+  "key": "highlight",
+  "transition": "zoom",
+  "presenter": false,
+  "glass": false
+ },
+ "bokeh-dream": {
+  "name": "bokeh-dream",
+  "desc": "Soft glowing bokeh, dreamy and gentle",
+  "tags": {
+   "mood": [
+    "calm",
+    "dreamy"
+   ],
+   "niches": [
+    "coaching",
+    "health",
+    "creator"
+   ],
+   "energy": 1,
+   "tone": "dark"
+  },
+  "bg": "bokeh",
+  "captionMode": "words",
+  "key": "gradient",
+  "transition": "zoom",
+  "presenter": false,
+  "glass": false
+ },
+ "matrix-rain": {
+  "name": "matrix-rain",
+  "desc": "Falling code rain, hacker terminal",
+  "tags": {
+   "mood": [
+    "techy",
+    "retro"
+   ],
+   "niches": [
+    "dev-tools",
+    "security",
+    "ai"
+   ],
+   "energy": 3,
+   "tone": "dark"
+  },
+  "bg": "matrix",
+  "captionMode": "words",
+  "key": "highlight",
+  "transition": "glitch",
+  "presenter": false,
+  "glass": false
+ },
+ "cinema-noir": {
+  "name": "cinema-noir",
+  "desc": "Black-and-white spotlight, letterbox, serif",
+  "tags": {
+   "mood": [
+    "dramatic",
+    "serious",
+    "luxury"
+   ],
+   "niches": [
+    "legal",
+    "luxury",
+    "coaching",
+    "creator"
+   ],
+   "energy": 2,
+   "tone": "dark"
+  },
+  "bg": "spotlight",
+  "captionMode": "words",
+  "key": "underline",
+  "transition": "zoom",
+  "presenter": false,
+  "glass": false
+ },
+ "podcast-karaoke": {
+  "name": "podcast-karaoke",
+  "desc": "Calm dark mesh; every word shown, current word lights up",
+  "tags": {
+   "mood": [
+    "calm",
+    "friendly"
+   ],
+   "niches": [
+    "coaching",
+    "creator",
+    "education"
+   ],
+   "energy": 2,
+   "tone": "dark"
+  },
+  "bg": "mesh",
+  "captionMode": "karaoke",
+  "key": "color",
+  "transition": "flash",
+  "presenter": false,
+  "glass": false
+ },
+ "tiktok-pill": {
+  "name": "tiktok-pill",
+  "desc": "White caption pills on a punchy gradient",
+  "tags": {
+   "mood": [
+    "energetic",
+    "playful"
+   ],
+   "niches": [
+    "creator",
+    "ecommerce",
+    "fitness"
+   ],
+   "energy": 5,
+   "tone": "dark"
+  },
+  "bg": "gradient",
+  "captionMode": "words",
+  "key": "highlight",
+  "transition": "wipe",
+  "presenter": false,
+  "glass": false
+ },
+ "notebook": {
+  "name": "notebook",
+  "desc": "Handwritten notebook paper, red-marker key words",
+  "tags": {
+   "mood": [
+    "cozy",
+    "friendly"
+   ],
+   "niches": [
+    "education",
+    "coaching",
+    "kids",
+    "creator"
+   ],
+   "energy": 2,
+   "tone": "light"
+  },
+  "bg": "paper",
+  "captionMode": "block",
+  "key": "underline",
+  "transition": "wipe",
+  "presenter": false,
+  "glass": false
+ },
+ "kraft-stamp": {
+  "name": "kraft-stamp",
+  "desc": "Brown kraft paper, bold stamped upper-case",
+  "tags": {
+   "mood": [
+    "bold",
+    "cozy"
+   ],
+   "niches": [
+    "food",
+    "local-business",
+    "ecommerce"
+   ],
+   "energy": 4,
+   "tone": "light"
+  },
+  "bg": "flat",
+  "captionMode": "words",
+  "key": "highlight",
+  "transition": "flash",
+  "presenter": false,
+  "glass": false
+ },
+ "sticky-note": {
+  "name": "sticky-note",
+  "desc": "Yellow sticky-note energy, friendly and casual",
+  "tags": {
+   "mood": [
+    "playful",
+    "cozy"
+   ],
+   "niches": [
+    "education",
+    "coaching",
+    "creator"
+   ],
+   "energy": 3,
+   "tone": "light"
+  },
+  "bg": "flat",
+  "captionMode": "block",
+  "key": "underline",
+  "transition": "zoom",
+  "presenter": false,
+  "glass": false
+ },
+ "glass": {
+  "name": "glass",
+  "desc": "Frosted-glass cards over a colour mesh",
+  "tags": {
+   "mood": [
+    "friendly",
+    "techy",
+    "luxury"
+   ],
+   "niches": [
+    "saas",
+    "ai",
+    "fintech"
+   ],
+   "energy": 3,
+   "tone": "dark"
+  },
+  "bg": "mesh",
+  "captionMode": "words",
+  "key": "gradient",
+  "transition": "zoom",
+  "presenter": false,
+  "glass": true
+ },
+ "mono-minimal": {
+  "name": "mono-minimal",
+  "desc": "Quiet white space, thin giant type",
+  "tags": {
+   "mood": [
+    "minimal",
+    "luxury",
+    "calm"
+   ],
+   "niches": [
+    "saas",
+    "luxury",
+    "agency"
+   ],
+   "energy": 1,
+   "tone": "light"
+  },
+  "bg": "flat",
+  "captionMode": "words",
+  "key": "underline",
+  "transition": "none",
+  "presenter": false,
+  "glass": false
+ },
+ "luxury-gold": {
+  "name": "luxury-gold",
+  "desc": "Black and gold serif, slow and premium",
+  "tags": {
+   "mood": [
+    "luxury",
+    "dramatic"
+   ],
+   "niches": [
+    "luxury",
+    "real-estate",
+    "coaching",
+    "legal"
+   ],
+   "energy": 1,
+   "tone": "dark"
+  },
+  "bg": "spotlight",
+  "captionMode": "words",
+  "key": "gradient",
+  "transition": "zoom",
+  "presenter": false,
+  "glass": false
+ },
+ "sage-calm": {
+  "name": "sage-calm",
+  "desc": "Soft sage greens, wellness and care",
+  "tags": {
+   "mood": [
+    "calm",
+    "cozy"
+   ],
+   "niches": [
+    "health",
+    "coaching",
+    "food"
+   ],
+   "energy": 1,
+   "tone": "light"
+  },
+  "bg": "dots",
+  "captionMode": "words",
+  "key": "highlight",
+  "transition": "zoom",
+  "presenter": false,
+  "glass": false
+ },
+ "fintech-clean": {
+  "name": "fintech-clean",
+  "desc": "Crisp blue-on-white, numbers first",
+  "tags": {
+   "mood": [
+    "serious",
+    "calm"
+   ],
+   "niches": [
+    "fintech",
+    "saas",
+    "b2b",
+    "real-estate"
+   ],
+   "energy": 2,
+   "tone": "light"
+  },
+  "bg": "dots",
+  "captionMode": "words",
+  "key": "highlight",
+  "transition": "flash",
+  "presenter": false,
+  "glass": false
+ }
+}

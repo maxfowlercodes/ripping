@@ -6,8 +6,9 @@ import { spawn, spawnSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 import { launch, rootDir } from './browser.mjs';
 import { run, ensureDir, probeDuration, home } from './util.mjs';
-import { synth, detectProvider, RTL } from './voice.mjs';
+import { synth, detectProvider, RTL, voiceCatalog } from './voice.mjs';
 import { transcribe, alignTokens, whisperAvailable } from './transcribe.mjs';
+import { writeSfx, eventsFor } from './sfx.mjs';
 
 const sha = x => crypto.createHash('sha1').update(typeof x === 'string' ? x : JSON.stringify(x)).digest('hex').slice(0, 14);
 export const customStyleFiles = () => {
@@ -56,9 +57,11 @@ function encodeSegment(frames, fps, out) {
   });
 }
 
-export async function renderReel2({ script, style, voice = 'auto', lang = 'en', music, out, fps = 30, draft = false, avatarFile, avatar, brandColors, sync, workDir, onLog = console.log, onProgress = () => {} }) {
+const FALLBACKS = ['kokoro', 'piper', 'edge', 'sapi', 'say', 'espeak'];
+const est = t => Math.max(1.2, t.split(/\s+/).length / 2.6);
+export async function renderReel2({ script, style, voice = 'auto', lang = 'en', music, out, fps = 30, draft = false, avatarFile, avatar, brandColors, sync, voiceId, sfx, workDir, onLog = console.log, onProgress = () => {} }) {
   ensureDir(workDir);
-  const provider = detectProvider(voice);
+  const provider = detectProvider(voice); const dead = new Set();
   const syncWhisper = sync !== false && whisperAvailable();
   const beatsText = script.beats; const n = beatsText.length;
   onLog(`style=${style} voice=${provider} lang=${lang}${draft ? ' (draft)' : ''}`);
@@ -70,11 +73,17 @@ export async function renderReel2({ script, style, voice = 'auto', lang = 'en', 
     const text = beatsText[i]; let seconds, file = null, words = null;
     if (avatarFile) { const tot = beatsText.reduce((a, b) => a + b.length, 0); seconds = (avatarSecs * text.length) / tot; }
     else {
-      const key = sha([text, provider, lang, process.env.ELEVENLABS_VOICE_ID || '']);
+      const key = sha([text, provider, lang, voiceId || '', process.env.ELEVENLABS_VOICE_ID || '']);
       const cached = fs.readdirSync(workDir).find(f => f.startsWith('a_' + key));
       if (cached) { file = path.join(workDir, cached); seconds = probeDuration(file); const wj = path.join(workDir, 'a_' + key + '.json'); if (fs.existsSync(wj)) words = JSON.parse(fs.readFileSync(wj, 'utf8')); }
       else {
-        const v = await synth(text, path.join(workDir, 'a_' + key), provider, { lang }); file = v.file; seconds = v.seconds; words = v.words;
+        // try the chosen voice, then fall back to the next working one (a provider that failed once is skipped for this render)
+        let v = { file: null, seconds: 0 };
+        for (const pv of [provider, ...FALLBACKS.filter(x => x !== provider)]) {
+          if (dead.has(pv) || (pv !== provider && !voiceCatalog().find(c => c.id === pv)?.available)) continue;
+          v = await synth(text, path.join(workDir, 'a_' + key), pv, { lang, voiceId: pv === provider ? voiceId : undefined }); if (v.file || pv === 'silent') { if (pv !== provider) onLog(`  voice fallback: ${provider} -> ${pv}`); break; } dead.add(pv);
+        }
+        file = v.file; seconds = v.seconds || est(text); words = v.words;
         // exact caption timing for any voice: align the script to Whisper's word timestamps (falls back to estimates)
         if (!words && file && syncWhisper) {
           const tr = transcribe(file, { lang, model: process.env.REELKIT_SYNC_MODEL || (lang === 'en' ? 'tiny.en' : 'base'), verbatim: false });
@@ -120,6 +129,9 @@ export async function renderReel2({ script, style, voice = 'auto', lang = 'en', 
   }
   if (!r.ok) throw new Error('audio failed: ' + r.err.slice(-400));
   const envelope = audioEnvelope(aud, fps);
+  // sound effects (generated), mixed under the voice; lip-sync above used the voice-only track
+  let mixedAud = aud;
+  if (sfx !== false && !avatarFile) { const sw = path.join(workDir, 'sfx.wav'); if (writeSfx(eventsFor(specBeats), total, sw)) { mixedAud = path.join(workDir, 'audio_sfx.m4a'); const rs = run('ffmpeg', ['-y', '-i', aud, '-i', sw, '-filter_complex', '[0:a][1:a]amix=inputs=2:duration=first:dropout_transition=0:normalize=0[a]', '-map', '[a]', '-c:a', 'aac', '-b:a', '160k', mixedAud]); if (!rs.ok) mixedAud = aud; } }
 
   // ---- 2. browser
   const browser = await launch();
@@ -159,7 +171,7 @@ export async function renderReel2({ script, style, voice = 'auto', lang = 'en', 
 
     // ---- 5. mux (+music, +avatar overlay)
     ensureDir(path.dirname(out));
-    const a = ['-y', '-i', vcat, '-i', aud]; let fcx = ''; let vmap = '0:v', amap = '1:a'; let vcodec = ['-c:v', 'copy'];
+    const a = ['-y', '-i', vcat, '-i', mixedAud]; let fcx = ''; let vmap = '0:v', amap = '1:a'; let vcodec = ['-c:v', 'copy'];
     let idx = 2;
     if (avatarFile) { a.push('-i', avatarFile); fcx += `[${idx}:v]scale=1080:-2,colorkey=0x00FF00:0.32:0.12,format=yuva420p[av];[0:v][av]overlay=0:H-h:shortest=1:format=auto,format=yuv420p[v];`; vmap = '[v]'; vcodec = ['-c:v', 'libx264', '-preset', 'veryfast', '-crf', '18']; idx++; }
     if (music && fs.existsSync(music)) { a.push('-stream_loop', '-1', '-i', music); fcx += `[${idx}:a]volume=0.10[m];[1:a][m]amix=inputs=2:duration=first:dropout_transition=0[am];`; amap = '[am]'; idx++; }
@@ -184,6 +196,27 @@ export async function renderCarouselPng({ slides, style, outDir, lang = 'en' }) 
     for (let i = 0; i < slides.length; i++) { await page.evaluate(i => RK.showSlide(i), i); const f = path.join(outDir, `slide-${String(i + 1).padStart(2, '0')}.png`); await page.screenshot({ path: f }); files.push(f); }
     return files;
   } finally { await browser.close(); }
+}
+
+/** Full style metadata (from the browser registry): name, desc, tags, bg, caption mode, whether it carries a presenter. */
+export async function styleInfo() {
+  const browser = await launch();
+  try { const { ctx, page } = await openStage(browser, 1); const r = await page.evaluate(() => Object.keys(RK.styles).map(n => { const c = RK.resolve(n); return { name: n, desc: c.desc || '', tags: c.tags || null, bg: c.bg, captionMode: c.caption?.mode || 'words', key: c.key, transition: c.transition || 'slide', presenter: !!c.avatar, glass: !!c.glass }; })); await ctx.close(); return r; }
+  finally { await browser.close(); }
+}
+
+/** One thumbnail per style (270x480 jpg) + catalog.json for the chooser. */
+export async function renderStylePreviews(outDir, catalogFile, onLog = () => {}) {
+  ensureDir(outDir); const info = await styleInfo(); const browser = await launch();
+  const words = [['Stop', .1], ['posting', .4], ['*reels*', .8], ['nobody', 1.2], ['watches.', 1.5]].map(([t, s]) => ({ t: t.replace(/\*/g, ''), s, e: s + .3, key: t.includes('*') }));
+  const beat = { text: 'Stop posting reels nobody watches.', start: 0, end: 5, words, visual: { type: 'counter', value: 628, label: 'teams onboarded', delta: '+64%' } };
+  try {
+    const { ctx, page } = await openStage(browser, 0.25);
+    for (const st of info) { await page.evaluate(s => RK.setup(s), { style: st.name, beats: [beat], total: 5, lang: 'en' }); await page.evaluate(() => RK.seek(2.6)); await page.screenshot({ path: path.join(outDir, st.name + '.jpg'), type: 'jpeg', quality: 78 }); onLog(st.name); }
+    await ctx.close();
+  } finally { await browser.close(); }
+  if (catalogFile) fs.writeFileSync(catalogFile, JSON.stringify(Object.fromEntries(info.map(i => [i.name, i])), null, 1));
+  return info.length;
 }
 
 export async function styleList() {

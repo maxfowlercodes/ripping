@@ -6,7 +6,7 @@
     width: '900px', borderRadius: '40px', padding: '44px', boxSizing: 'border-box', background: cfg.colors.card || '#fff',
     color: cfg.colors.cardFg || '#0f172a', boxShadow: '0 30px 80px rgba(0,0,0,.28), 0 0 0 1px rgba(128,128,128,.14)',
     fontFamily: RK.FONT_STACK, position: 'relative',
-  }, extra || {}), box);
+  }, cfg.glass ? { backdropFilter: 'blur(26px) saturate(1.4)', WebkitBackdropFilter: 'blur(26px) saturate(1.4)', boxShadow: '0 20px 60px rgba(0,0,0,.25), inset 0 0 0 1.5px rgba(255,255,255,.28)' } : {}, extra || {}), box);
   const curve = (pts, w, hh) => {
     const mn = Math.min(...pts), mx = Math.max(...pts), rg = mx - mn || 1;
     const xy = pts.map((v, i) => [(i / (pts.length - 1)) * w, hh - 14 - ((v - mn) / rg) * (hh - 30)]);

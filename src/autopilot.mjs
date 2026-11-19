@@ -16,8 +16,10 @@ import { renderReel2 } from './render2.mjs';
 import { prepareReelPost, sharePost } from './computer.mjs';
 import { publishReel } from './instagram.mjs';
 import { makeAvatar } from './heygen.mjs';
+import { rankStyles, validStyle } from './stylecatalog.mjs';
+import { runResearch, getResearch } from './research.mjs';
 
-export const STEPS = [['brand', 'Brand profile'], ['refs', 'References'], ['idea', 'Choose idea'], ['script', 'Write script'], ['render', 'Render video'], ['caption', 'Caption'], ['post', 'Post'], ['track', 'Track results']];
+export const STEPS = [['brand', 'Brand profile'], ['research', 'Deep research'], ['refs', 'References'], ['idea', 'Choose idea'], ['script', 'Write script'], ['render', 'Render video'], ['caption', 'Caption'], ['post', 'Post'], ['track', 'Track results']];
 const dir = () => ensureDir(path.join(home(), 'runs'));
 const rf = id => path.join(dir(), id + '.json');
 export const getRun = id => readJson(rf(id), null);
@@ -44,6 +46,12 @@ const logR = (r, m) => { r.log = [...r.log.slice(-60), `${new Date().toISOString
 
 async function stepBrand(r) { const miss = missingBrand(); if (miss.length) throw new Wait({ type: 'brand', message: 'Tell me about your product first: ' + miss.join(', '), inbox: { type: 'need-brand', title: 'Set up your brand', body: 'Missing: ' + miss.join(', ') } }); return 'ok'; }
 
+async function stepResearch(r) {
+  const cur = getResearch(); if (r.opts.skipResearch || cur?.finished) return cur?.finished ? 'done earlier (reelkit deep-research --refresh to redo)' : 'skipped';
+  const res = await runResearch({ log: m => logR(r, m), onProgress: ({ label }) => { const s = r.steps.find(x => x.id === 'research'); s.detail = label; save(r); } });
+  return `${Object.values(res.stages).filter(x => x.status === 'done').length} stages, report in research.md`;
+}
+
 async function stepRefs(r) {
   const b = getBrand(); const have = referenceCount(); const a = r.ctx.answers?.refs;
   if (a?.text) addFromText(a.text, b.niche || 'general');
@@ -64,24 +72,26 @@ async function stepIdea(r) {
 async function stepScript(r) {
   if (r.ctx.slug) return r.ctx.slug;
   const b = getBrand(); const refs = listSwipe({ status: 'saved' }); const lang = b.production.lang || 'en';
-  const w = await askClaude({ task: 'script_write', prompt: scriptPrompt({ brand: b, idea: r.ctx.idea, refs, lang }), system: SYSTEM, schema: schemas.script, log: m => logR(r, m) });
+  const auto = (b.production.style || 'auto') === 'auto'; const shortlist = auto ? rankStyles({ brand: b }).slice(0, 6) : null;
+  const w = await askClaude({ task: 'script_write', prompt: scriptPrompt({ brand: b, idea: r.ctx.idea, refs, lang, styles: shortlist }), system: SYSTEM, schema: schemas.script, log: m => logR(r, m) });
   let { title, lines } = w.output; let sc, l, attempt = 0;
+  const style = auto ? (shortlist.some(x => x.name === w.output.style) || validStyle(w.output.style) ? w.output.style : shortlist[0].name) : b.production.style; r.ctx.style = style;
   for (;; attempt++) {
     sc = parseScript(`# ${title}\n${lines.join('\n')}`); l = lint(sc);
     if (l.score >= 85 || attempt >= 2) break;
     const issues = l.checks.filter(c => !c.pass).map(c => c.msg); logR(r, `lint ${l.score}: fixing (${issues.length} issues)`);
     const f = await askClaude({ task: 'lint_fix', prompt: lintFixPrompt({ lines, issues }), system: SYSTEM, schema: schemas.script, log: m => logR(r, m) }); lines = f.output.lines; title = f.output.title || title;
   }
-  const slug = createReel(title, `# ${title}\n${lines.join('\n')}\n`); const m = getMeta(slug); Object.assign(m, { lang, lint: l.score, idea: r.ctx.idea, runId: r.id }); saveMeta(slug, m);
-  r.ctx.slug = slug; r.ctx.lint = l.score; save(r); return `${slug} (lint ${l.score}, ${w.model}${w.cached ? ', cached' : ''})`;
+  const slug = createReel(title, `# ${title}\n[style: ${style}]\n${lines.join('\n')}\n`); const m = getMeta(slug); Object.assign(m, { lang, lint: l.score, idea: r.ctx.idea, runId: r.id }); saveMeta(slug, m);
+  r.ctx.slug = slug; r.ctx.lint = l.score; save(r); return `${slug} (lint ${l.score}, style ${style}, ${w.model}${w.cached ? ', cached' : ''})`;
 }
 
 async function stepRender(r) {
   const slug = r.ctx.slug; const out = path.join(reelDir(slug), 'reel.mp4'); if (r.ctx.rendered && fs.existsSync(out)) return 'rendered';
   const b = getBrand(); const sc = parseScript(fs.readFileSync(scriptPath(slug), 'utf8')); const P = b.production; let avatarFile, avatar = P.avatar && P.avatar !== 'none' ? P.avatar : undefined;
   if (avatar && avatar.startsWith('heygen')) { const [, aid, vid] = avatar.split(':'); avatarFile = path.join(reelDir(slug), 'avatar.mp4'); if (!fs.existsSync(avatarFile)) { logR(r, 'HeyGen avatar...'); await makeAvatar({ text: sc.beats.join(' '), avatarId: aid, voiceId: vid, out: avatarFile }); } }
-  const res = await renderReel2({ script: sc, style: sc.style || P.style, voice: P.voice, lang: P.lang, music: P.music || undefined, out, avatar, avatarFile, brandColors: P.brandColors || undefined, workDir: path.join(reelDir(slug), 'work'), onLog: m => logR(r, m.trim()), onProgress: ({ stage, done, total }) => { const s = r.steps.find(x => x.id === 'render'); s.detail = `${stage} ${done}/${total}`; save(r); } });
-  const m = getMeta(slug); const v = virality(sc, res.durations); Object.assign(m, { status: 'rendered', durations: res.durations, seconds: res.seconds, style: sc.style || P.style, virality: { score: v.score, estSkipRate: v.estSkipRate }, rendered: new Date().toISOString() }); saveMeta(slug, m);
+  const res = await renderReel2({ script: sc, style: sc.style || (P.style === 'auto' ? rankStyles({ brand: b })[0].name : P.style), voice: P.voice, voiceId: P.voiceId || undefined, sfx: P.sfx !== false, lang: P.lang, music: P.music || undefined, out, avatar, avatarFile, brandColors: P.brandColors || undefined, workDir: path.join(reelDir(slug), 'work'), onLog: m => logR(r, m.trim()), onProgress: ({ stage, done, total }) => { const s = r.steps.find(x => x.id === 'render'); s.detail = `${stage} ${done}/${total}`; save(r); } });
+  const m = getMeta(slug); const v = virality(sc, res.durations); Object.assign(m, { status: 'rendered', durations: res.durations, seconds: res.seconds, style: sc.style || (P.style === 'auto' ? rankStyles({ brand: b })[0].name : P.style), virality: { score: v.score, estSkipRate: v.estSkipRate }, rendered: new Date().toISOString() }); saveMeta(slug, m);
   r.ctx.rendered = true; r.ctx.virality = v.score; save(r); return `${res.seconds}s, virality ${v.score}`;
 }
 
@@ -113,7 +123,7 @@ async function stepPost(r) {
   if (s.status !== 'posted') throw new Error('Share not confirmed: ' + (s.note || s.status)); markPosted({ permalink: s.url }); return s.url ? 'posted ' + s.url : 'posted';
 }
 async function stepTrack(r) { return 'snapshots are taken at 1h, day 1, 3, 7, 14, 30 while Reelkit is running'; }
-const FN = { brand: stepBrand, refs: stepRefs, idea: stepIdea, script: stepScript, render: stepRender, caption: stepCaption, post: stepPost, track: stepTrack };
+const FN = { brand: stepBrand, research: stepResearch, refs: stepRefs, idea: stepIdea, script: stepScript, render: stepRender, caption: stepCaption, post: stepPost, track: stepTrack };
 
 export function copyClipboard(text) { try { if (isWin) sh('clip', [], { input: text }); else if (isMac) sh('pbcopy', [], { input: text }); else sh('xclip', ['-selection', 'clipboard'], { input: text }); } catch {} }
 

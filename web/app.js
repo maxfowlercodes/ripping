@@ -6,7 +6,7 @@ const toast = m => { const t = $('#toast'); t.textContent = m; t.style.display =
 const mmss = s => `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, '0')}`;
 const fmt = n => (n == null ? '–' : n >= 1e6 ? (n / 1e6).toFixed(1) + 'M' : n >= 1e4 ? Math.round(n / 1e3) + 'K' : n.toLocaleString());
 const S = { state: null, slug: localStorage.getItem('rk.slug') || '', style: localStorage.getItem('rk.style') || 'aurora-dark', timers: [] };
-const TABS = [['today', '★', 'Today'], ['swipe', '01', 'Swipe'], ['script', '02', 'Script'], ['produce', '03', 'Produce'], ['post', '04', 'Post'], ['analyze', '05', 'Analyze'], ['repurpose', '06', 'Repurpose'], ['footage', '🎬', 'Footage'], ['claude', '🧠', 'Claude'], ['setup', '⚙', 'Setup']];
+const TABS = [['today', '★', 'Today'], ['swipe', '01', 'Swipe'], ['script', '02', 'Script'], ['produce', '03', 'Produce'], ['post', '04', 'Post'], ['analyze', '05', 'Analyze'], ['repurpose', '06', 'Repurpose'], ['footage', '🎬', 'Footage'], ['leads', '💬', 'Leads'], ['research', '🔎', 'Research'], ['claude', '🧠', 'Claude'], ['setup', '⚙', 'Setup'], ['guide', '?', 'Guide']];
 const stop = () => { S.timers.forEach(clearInterval); S.timers = []; };
 const reels = () => S.state?.reels || [];
 const cur = () => reels().find(r => r.slug === S.slug) || reels()[0];
@@ -19,9 +19,24 @@ function bindNew(fn) { const b = $('#newreel'); if (b) b.onclick = async () => {
 async function route() {
   stop(); const h = (location.hash || '#today').slice(1);
   $('#nav').innerHTML = TABS.map(([k, n, l]) => `<a href="#${k}" class="${k === h ? 'on' : ''}"><b>${n}</b>${l}</a>`).join('');
-  try { await refresh(); await ({ today, swipe, script, produce, post, analyze, repurpose, footage, claude, setup }[h] || today)(); } catch (e) { $('#main').innerHTML = `<div class="card bad">${esc(e.message)}</div>`; }
+  try { await refresh(); await ({ today, swipe, script, produce, post, analyze, repurpose, footage, leads, research, claude, setup, guide }[h] || today)(); } catch (e) { $('#main').innerHTML = `<div class="card bad">${esc(e.message)}</div>`; }
 }
 addEventListener('hashchange', route);
+
+
+// ---------------------------------------------------------------- shared: style gallery
+const MOODS = ['all', 'calm', 'bold', 'playful', 'techy', 'serious', 'friendly', 'luxury', 'energetic'];
+function styleGallery(host, selected, onPick, { auto = false } = {}) {
+  let mood = 'all', tone = 'all'; const styles = S.state.styles;
+  const draw = () => {
+    const list = styles.filter(s => (mood === 'all' || s.tags?.mood?.includes(mood)) && (tone === 'all' || s.tags?.tone === tone));
+    host.innerHTML = `<div class="row" style="margin-bottom:10px">${MOODS.map(m => `<button class="alt ${m === mood ? 'on' : ''}" data-m="${m}" style="padding:5px 12px;font-size:13px">${m}</button>`).join('')}<span class="grow"></span>${['all', 'light', 'dark'].map(t => `<button class="alt" data-t="${t}" style="padding:5px 12px;font-size:13px;${t === tone ? 'outline:2px solid var(--ac)' : ''}">${t}</button>`).join('')}</div>
+    <div class="sgrid">${auto ? `<div class="sc2 ${selected === 'auto' ? 'sel' : ''}" data-s="auto"><div class="autoimg">✨</div><b>Auto</b><span class="mut">Claude picks per reel from the best-fitting styles, avoiding repeats</span></div>` : ''}
+    ${list.map(s => `<div class="sc2 ${s.name === selected ? 'sel' : ''}" data-s="${esc(s.name)}"><img loading="lazy" src="/styles/previews/${esc(s.name)}.jpg" alt=""><b>${esc(s.name)}</b><span class="mut">${esc(s.desc)}</span><span class="mut" style="font-size:11px">${esc((s.tags?.mood || []).join(' · '))}${s.tags ? ' · energy ' + s.tags.energy : ''}</span></div>`).join('')}</div>`;
+    host.querySelectorAll('[data-m]').forEach(b => (b.onclick = () => { mood = b.dataset.m; draw(); })); host.querySelectorAll('[data-t]').forEach(b => (b.onclick = () => { tone = b.dataset.t; draw(); }));
+    host.querySelectorAll('[data-s]').forEach(c => (c.onclick = () => { selected = c.dataset.s; onPick(selected); draw(); }));
+  }; draw();
+}
 
 // ---------------------------------------------------------------- 01 Swipe
 async function swipe() {
@@ -65,13 +80,13 @@ async function produce() {
   const r = cur(); const files = r ? await fileOk(r.slug) : {};
   $('#main').innerHTML = `<h2>Produce</h2><p class="sub">Voice, motion graphics, captions, render. Interrupted renders resume from saved scenes.</p>
   <div class="row card">${reelPicker()}${newReelBtn()}</div>${r ? `
-  <div class="card"><b>Style</b> <span class="mut">(${S.state.styles.length})</span><div class="grid" style="margin-top:10px">${S.state.styles.map(s => `<div class="card stylecard ${s.name === S.style ? 'sel' : ''}" data-s="${esc(s.name)}" style="margin:0"><b>${esc(s.name)}</b><br><span class="mut" style="font-size:12px">${esc(s.desc)}</span></div>`).join('')}</div></div>
+  <div class="card"><b>Style</b> <span class="mut">(${S.state.styles.length} + auto)</span><div id="sg" style="margin-top:10px"></div></div>
   <div class="split"><div class="card"><div class="split"><div><label>Voice</label><select id="voice"><option value="auto">auto (${esc(S.state.provider)})</option><option>elevenlabs</option><option>edge</option><option>sapi</option><option>say</option><option>espeak</option><option>silent</option></select></div><div><label>Language</label><select id="lang">${['en', 'es', 'fr', 'it', 'pt', 'de', 'ja', 'ko', 'zh', 'hi', 'ru', 'uk', 'he', 'ar', 'el', 'tr'].map(l => `<option ${((r.lang || 'en') === l) ? 'selected' : ''}>${l}</option>`).join('')}</select></div></div>
   <p class="row"><label style="margin:0"><input type="checkbox" id="draft" style="width:auto"> fast draft</label><span class="grow"></span><button id="go">Render</button></p><div id="jobs"></div></div>
   <div class="card" id="player">${files.reel ? `<video controls playsinline src="/file/${r.slug}/reel.mp4?${r.rendered || ''}"></video>` : files.draft ? `<video controls playsinline src="/file/${r.slug}/draft.mp4"></video>` : '<p class="mut">No render yet.</p>'}<div id="vir"></div></div></div>` : ''}`;
   bindPicker(produce); bindNew(produce); if (!r) return;
-  document.querySelectorAll('.stylecard').forEach(e => (e.onclick = () => { S.style = e.dataset.s; localStorage.setItem('rk.style', S.style); document.querySelectorAll('.stylecard').forEach(x => x.classList.toggle('sel', x === e)); }));
-  $('#go').onclick = async () => { await api('/render', { slug: r.slug, style: S.style, voice: $('#voice').value, lang: $('#lang').value, draft: $('#draft').checked }); toast('Queued'); poll(); };
+  styleGallery($('#sg'), S.style, v => { S.style = v; localStorage.setItem('rk.style', v); }, { auto: true });
+  $('#go').onclick = async () => { await api('/render', { slug: r.slug, style: S.style === 'auto' ? undefined : S.style, voice: $('#voice').value, lang: $('#lang').value, draft: $('#draft').checked }); toast('Queued'); poll(); };
   const v = await api('/script/' + r.slug); vir(v.virality);
   function vir(x) { const W = 320, H = 110, tot = x.duration || 1; const pts = x.curve.map(p => `${(p.at / tot) * W},${H - (p.pct / 100) * H}`).join(' ');
     $('#vir').innerHTML = `<h3 style="margin:14px 0 6px">Virality Brain <span class="chip">${x.score}/100</span></h3><svg viewBox="0 0 ${W} ${H}" width="100%" style="background:var(--panel2);border-radius:10px"><polyline points="${pts}" fill="none" stroke="var(--ac)" stroke-width="3"/></svg>
@@ -132,9 +147,10 @@ async function repurpose() {
 // ---------------------------------------------------------------- Today
 const STEPICON = { done: '✔', running: '…', waiting: '⏸', failed: '✘', pending: '·', skipped: '–' };
 async function today() {
-  const t = await api('/today'); const run = t.runs.find(r => ['queued', 'running', 'waiting'].includes(r.status)) || t.runs[0];
+  const t = await api('/today'); const gd = await api('/guide'); const next = gd.steps.filter(x => !x.done && x.id !== 'chat').slice(0, 2); const run = t.runs.find(r => ['queued', 'running', 'waiting'].includes(r.status)) || t.runs[0];
   const u = t.usage;
   $('#main').innerHTML = `<h2>Today</h2><p class="sub">One click makes a reel from your references and posts it. Claude is used only where code can't do the job.</p>
+  ${next.length ? `<div class="card" style="border-color:var(--ac)"><b>Start here</b> <span class="mut">(${gd.doneCount}/${gd.steps.length} done)</span>${next.map(x => `<div class="lintli"><span class="bad">○</span><span><b>${esc(x.title)}</b> <a href="${esc(x.link)}">open</a></span></div>`).join('')}<a href="#guide">Full guide</a></div>` : ''}
   ${t.brandMissing.length ? `<div class="card" style="border-color:var(--ac)"><b>Set up your brand first</b><p class="mut">Missing: ${esc(t.brandMissing.join(', '))}. <a href="#setup">Open Setup</a></p></div>` : ''}
   ${!t.claude ? `<div class="card" style="border-color:var(--bad)"><b>Claude Code isn't installed</b><p class="mut">Install it (<code>npm i -g @anthropic-ai/claude-code</code>) and run <code>claude</code> once to sign in.</p></div>` : ''}
   <div class="card"><div class="row"><div class="grow"><b style="font-size:20px">Make &amp; Post</b><div class="mut">references → idea → script → render → caption → post</div></div>
@@ -230,8 +246,10 @@ async function setup() {
   $('#main').innerHTML = `<h2>Setup</h2><p class="sub">Everything runs on this computer.</p>
   <div class="card"><b>Your brand</b><p class="mut">Claude only uses facts you put here. Never invent numbers: add real proof points.</p>${f('b_product', 'Product (one line)', b.product)}${f('b_audience', 'Who it is for', b.audience)}${f('b_problem', 'Their real problem', b.problem)}<div class="split"><div>${f('b_cta', 'CTA keyword (viewers comment this)', b.cta)}</div><div>${f('b_niche', 'Niche tag', b.niche)}</div></div>${f('b_tone', 'Tone', b.tone)}
   <label>Proof points (one per line: claim = number)</label><textarea id="b_proof" style="min-height:80px">${esc(b.proof.map(p => p.claim + (p.number ? ' = ' + p.number : '')).join('\n'))}</textarea><label>Competitor / inspiration handles (comma separated)</label><input id="b_comp" value="${esc(b.competitors.join(', '))}"></div>
-  <div class="card"><b>Production</b><div class="split"><div><label>Default style</label><select id="p_style">${S.state.styles.map(s => `<option ${s.name === P.style ? 'selected' : ''}>${esc(s.name)}</option>`).join('')}</select></div><div><label>Presenter</label><select id="p_av">${['none', 'founder', 'robot', 'blob'].map(a => `<option ${a === P.avatar ? 'selected' : ''}>${a}</option>`).join('')}${P.avatar?.startsWith('heygen') ? `<option selected>${esc(P.avatar)}</option>` : ''}</select></div></div>
-  <div class="split"><div><label>Voice</label><select id="p_voice">${['auto', 'piper', 'elevenlabs', 'edge', 'sapi', 'say', 'espeak', 'silent'].map(v => `<option ${v === P.voice ? 'selected' : ''}>${v}</option>`).join('')}</select></div><div><label>Language</label><select id="p_lang">${['en', 'es', 'fr', 'it', 'pt', 'de', 'ja', 'ko', 'zh', 'hi', 'ru', 'uk', 'he', 'ar', 'el', 'tr'].map(l => `<option ${l === P.lang ? 'selected' : ''}>${l}</option>`).join('')}</select></div></div></div>
+  <div class="card"><b>Production</b>${f('b_site', 'Your website (used by the deep research)', b.website || '')}<label>Default style</label><div id="sgs"></div>
+  <div class="split"><div><label>Presenter</label><select id="p_av">${['none', 'founder', 'robot', 'blob'].map(a => `<option ${a === P.avatar ? 'selected' : ''}>${a}</option>`).join('')}${P.avatar?.startsWith('heygen') ? `<option selected>${esc(P.avatar)}</option>` : ''}</select></div><div><label>Language</label><select id="p_lang">${['en', 'es', 'fr', 'it', 'pt', 'de', 'ja', 'ko', 'zh', 'hi', 'ru', 'uk', 'he', 'ar', 'el', 'tr'].map(l => `<option ${l === P.lang ? 'selected' : ''}>${l}</option>`).join('')}</select></div></div>
+  <label><input type="checkbox" id="p_sfx" style="width:auto" ${P.sfx !== false ? 'checked' : ''}> Sound effects (soft whoosh on cuts, pop on key words)</label>
+  <h4 style="margin:18px 0 6px">Voice</h4><div id="vp"></div></div>
   <div class="card"><b>Posting</b><div class="split"><div><label>Method</label><select id="o_method"><option value="computer" ${Po.method === 'computer' ? 'selected' : ''}>Claude uses my browser (no API needed)</option><option value="api" ${Po.method === 'api' ? 'selected' : ''}>Instagram API</option><option value="manual" ${Po.method === 'manual' ? 'selected' : ''}>Manual (copy caption, open file)</option></select></div><div><label>Before sharing</label><select id="o_mode"><option value="review" ${Po.mode === 'review' ? 'selected' : ''}>ask me first</option><option value="auto" ${Po.mode === 'auto' ? 'selected' : ''}>post automatically</option><option value="none" ${Po.mode === 'none' ? 'selected' : ''}>render only</option></select></div></div>
   ${f('o_user', 'Your Instagram username (for reading insights)', Po.username)}<label><input type="checkbox" id="o_trial" style="width:auto" ${Po.trial ? 'checked' : ''}> post as trial reel when possible</label>
   <p class="row"><button class="alt" id="browser">Open Reelkit browser to log in to Instagram</button><span class="mut">Log in once; the login stays in this dedicated profile.</span></p></div>
@@ -239,11 +257,81 @@ async function setup() {
   <label><input type="checkbox" id="d_auto" style="width:auto" ${D.autopilot ? 'checked' : ''}> If I don't answer within <input id="d_grace" type="number" value="${D.graceMinutes}" style="width:80px;display:inline"> minutes, run Make &amp; Post automatically (still pauses for review if that is on)</label><label><input type="checkbox" id="n_on" style="width:auto" ${b.notify ? 'checked' : ''}> Desktop notifications</label></div>
   <p><button id="save" style="font-size:17px">Save</button></p>
   <div class="card"><b>Health</b>${row(h.ffmpeg, 'ffmpeg', 'winget install Gyan.FFmpeg')}${row(h.browser, 'Chrome or Edge + playwright-core', 'npm install')}${row(S.state.provider !== 'silent', 'Voice: ' + esc(S.state.provider), 'pip install piper-tts, then reelkit voices install en')}${row(h.instagram || Po.method !== 'api', 'Instagram API (only for method = API)', 'docs/INSTAGRAM.md')}</div>`;
+  styleGallery($('#sgs'), P.style || 'auto', v => (P.style = v), { auto: true }); const vget = await voicePicker($('#vp'), P, () => $('#p_lang').value);
   $('#browser').onclick = async () => { await api('/browser', {}); toast('Browser opened: log in to Instagram'); };
   $('#save').onclick = async () => {
     const v = id => $('#' + id).value; const proof = v('b_proof').split('\n').map(l => l.trim()).filter(Boolean).map(l => { const [c, n] = l.split('='); return { claim: c.trim(), number: (n || '').trim() }; });
     await api('/brand', { product: v('b_product'), audience: v('b_audience'), problem: v('b_problem'), cta: v('b_cta'), niche: v('b_niche'), tone: v('b_tone'), proof, competitors: v('b_comp').split(',').map(x => x.trim()).filter(Boolean), notify: $('#n_on').checked,
-      production: { style: v('p_style'), avatar: v('p_av'), voice: v('p_voice'), lang: v('p_lang') }, posting: { method: v('o_method'), mode: v('o_mode'), username: v('o_user'), trial: $('#o_trial').checked }, daily: { enabled: $('#d_on').checked, time: v('d_time'), minReferences: +v('d_min'), autopilot: $('#d_auto').checked, graceMinutes: +v('d_grace') } });
+      website: v('b_site'), production: { style: P.style || 'auto', avatar: v('p_av'), ...vget(), lang: v('p_lang'), sfx: $('#p_sfx').checked }, posting: { method: v('o_method'), mode: v('o_mode'), username: v('o_user'), trial: $('#o_trial').checked }, daily: { enabled: $('#d_on').checked, time: v('d_time'), minReferences: +v('d_min'), autopilot: $('#d_auto').checked, graceMinutes: +v('d_grace') } });
     toast('Saved'); };
+}
+
+// ---------------------------------------------------------------- voice picker
+async function voicePicker(host, P, getLang) {
+  const { providers, auto } = await api('/voices'); let prov = P.voice || 'auto', vid = P.voiceId || '';
+  const stars = n => '★'.repeat(n) + '☆'.repeat(5 - n);
+  const draw = () => {
+    const cur = providers.find(p => p.id === prov); const lang = getLang();
+    const voices = (cur?.voices || []).filter(v => v.lang === lang || v.lang === lang.split('-')[0]);
+    host.innerHTML = `<label style="display:flex;gap:8px;align-items:center;text-transform:none;font-size:14px;color:var(--fg)"><input type="radio" name="vp" value="auto" style="width:auto" ${prov === 'auto' ? 'checked' : ''}> <b>Auto</b> <span class="mut">best available: ${esc(auto)}</span></label>
+    ${providers.map(p => `<label style="display:flex;gap:8px;align-items:flex-start;text-transform:none;font-size:14px;color:${p.available ? 'var(--fg)' : 'var(--mut)'}"><input type="radio" name="vp" value="${esc(p.id)}" style="width:auto;margin-top:4px" ${p.id === prov ? 'checked' : ''} ${p.available ? '' : 'disabled'}><span><b>${esc(p.label)}</b> <span class="mut">${esc(p.kind)} · ${stars(p.quality)}</span><br>${p.available ? '<span class="ok">ready</span>' : `<span class="mut">not set up: ${esc(p.install)}</span>`}</span></label>`).join('')}
+    <div class="row" style="margin-top:10px">${voices.length ? `<select id="vsel" style="width:auto"><option value="">default voice</option>${voices.map(v => `<option value="${esc(v.id)}" ${v.id === vid ? 'selected' : ''}>${esc(v.name)}</option>`).join('')}</select>` : ''}<button class="alt" id="vprev">▶ Preview</button><audio id="vaud" controls style="display:none;height:34px"></audio><span id="vmsg" class="mut"></span></div>`;
+    host.querySelectorAll('input[name=vp]').forEach(r => (r.onchange = () => { prov = r.value; vid = ''; draw(); }));
+    const sel = host.querySelector('#vsel'); if (sel) sel.onchange = () => (vid = sel.value);
+    $('#vprev').onclick = async () => { $('#vmsg').textContent = 'Generating…'; try { const r = await api('/voices/preview', { provider: prov, voiceId: vid, lang }); const a = $('#vaud'); a.src = r.url; a.style.display = 'inline-block'; a.play(); $('#vmsg').textContent = ''; await api('/guide/confirm', { id: 'voiceChecked' }); } catch (e) { $('#vmsg').textContent = e.message; } };
+  };
+  draw(); return () => ({ voice: prov, voiceId: vid });
+}
+
+const md = t => { const lines = esc(t).split('\n'); let out = '', inList = false; for (let l of lines) { l = l.replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/_(.+?)_/g, '<i>$1</i>'); if (/^- /.test(l)) { if (!inList) { out += '<ul>'; inList = true; } out += '<li>' + l.slice(2) + '</li>'; continue; } if (inList) { out += '</ul>'; inList = false; } if (/^### /.test(l)) out += '<h4>' + l.slice(4) + '</h4>'; else if (/^## /.test(l)) out += '<h3>' + l.slice(3) + '</h3>'; else if (/^# /.test(l)) out += '<h2>' + l.slice(2) + '</h2>'; else if (l.trim()) out += '<p>' + l + '</p>'; } return out + (inList ? '</ul>' : ''); };
+
+// ---------------------------------------------------------------- Research
+async function research() {
+  const r = await api('/research'); const res = r.research; const stages = [['site', 'Your website'], ['audience', 'Your audience'], ['competitors', 'Competitors'], ['strategy', 'Strategy']];
+  const { brand: b } = await api('/brand'); await refresh(); const job = S.state.jobs.find(j => j.type === 'research'); const running = job && ['queued', 'running'].includes(job.status);
+  $('#main').innerHTML = `<h2>Research</h2><p class="sub">The first-time deep dive: what you really offer, who buys and in what words, what competitors do, and a content strategy. Runs once, saved, and feeds every script.</p>
+  <div class="card"><div class="row"><div class="grow"><b>${res?.finished ? 'Research complete' : 'Not run yet'}</b><div class="mut">Website: ${esc(b.website || 'none yet (add it in Setup for better results)')} · uses Claude's web search + fetch (sonnet) · about 4 calls, 5 to 10 minutes</div></div>
+  <button id="go" ${running ? 'disabled' : ''}>${running ? 'Running…' : res?.finished ? '↻ Refresh research' : '▶ Run deep research'}</button></div>
+  <div style="margin-top:10px">${stages.map(([id, n]) => { const st = res?.stages?.[id]; return `<span class="chip ${st?.status === 'done' ? 'cta' : ''}" style="margin-right:6px">${st?.status === 'done' ? '✔' : st?.status === 'failed' ? '✘' : '·'} ${n}</span>`; }).join('')}</div>
+  ${running ? `<div class="bar" style="margin-top:10px"><i style="width:${Math.round((job.progress || 0.05) * 100)}%"></i></div><p class="mut">${esc(job.stage || 'starting…')}</p>` : ''}
+  ${stages.map(([id]) => res?.stages?.[id]?.status === 'failed' ? `<p class="bad">${esc(res.stages[id].error)}</p>` : '').join('')}</div>
+  ${r.report ? `<div class="card md">${md(r.report)}</div>` : ''}`;
+  $('#go').onclick = async () => { await api('/research/run', { force: !!res?.finished }); toast('Started'); research(); };
+  if (running) S.timers.push(setInterval(research, 4000));
+}
+
+// ---------------------------------------------------------------- Leads & chat
+async function leads() {
+  const d = await api('/leads'); const c = d.chat; const st = d.status; const link = st?.url;
+  const faqText = (c.faq || []).map(f => `Q: ${f.q}\nA: ${f.a}`).join('\n\n');
+  $('#main').innerHTML = `<h2>Leads &amp; chat</h2><p class="sub">A link for your Instagram bio. Visitors give name, email and what they need, then chat with an AI that only knows what you tell it here. Every visitor is saved as a lead.</p>
+  <div class="card"><div class="row"><b class="grow">Business chat</b><label style="margin:0;text-transform:none;font-size:14px;color:var(--fg)"><input type="checkbox" id="c_on" style="width:auto" ${c.enabled ? 'checked' : ''}> turned on</label></div>
+  ${c.enabled ? `<p>${link ? `Your link: <a href="${esc(link)}" target="_blank" rel="noopener noreferrer">${esc(link)}</a> <button class="alt" id="cp" style="padding:4px 10px">Copy</button>` : '<span class="mut">Starts with the app (restart it after turning on).</span>'}</p><p class="mut">${st?.tunnel ? 'Public through a temporary Cloudflare tunnel. The address changes each time the app restarts.' : link && link.includes('localhost') ? 'Only reachable on this computer. For a public link install cloudflared (winget install Cloudflare.cloudflared) and restart. ' + esc(st?.error || '') : ''}</p>` : ''}
+  <div class="split"><div><label>Business name</label><input id="c_name" value="${esc(c.businessName)}"></div><div><label>Tagline</label><input id="c_tag" value="${esc(c.tagline)}"></div></div>
+  <label>Welcome message</label><input id="c_wel" value="${esc(c.welcome)}" placeholder="Hi! Ask me anything about…">
+  <label>FAQ (the assistant answers ONLY from this plus your brand facts). Format: Q: question then A: answer, blank line between</label><textarea id="c_faq" style="min-height:140px">${esc(faqText)}</textarea>
+  <div class="split"><div><label>Free resource label (optional)</label><input id="c_ml" value="${esc(c.leadMagnet.label)}" placeholder="Pricing playbook"></div><div><label>Resource text or link</label><input id="c_mu" value="${esc(c.leadMagnet.url || c.leadMagnet.text)}" placeholder="https://…"></div></div>
+  <label>Consent text shown to visitors</label><textarea id="c_con" style="min-height:60px">${esc(c.consent)}</textarea>
+  <p class="row"><button id="c_save">Save</button><span class="mut">Replies use the small model (haiku) with their own daily budget (${'200'} messages), so visitors never use up your content budget.</span></p></div>
+  <div class="card"><div class="row"><b class="grow">Leads (${d.leads.length})</b><a class="btn" href="/api/leads.csv" style="padding:6px 12px">Export CSV</a></div>
+  ${d.leads.map(l => `<details style="border-bottom:1px solid var(--line);padding:8px 0"><summary><b>${esc(l.name)}</b> &lt;${esc(l.email)}&gt; <span class="chip">${esc(l.status)}</span> <span class="mut">${esc(l.created.slice(0, 10))}</span></summary><p><b>Needs:</b> ${esc(l.need)}</p>${(l.transcript || []).map(m => `<div class="lintli"><b style="width:70px">${m.role === 'user' ? 'Visitor' : 'AI'}</b><span>${esc(m.text)}</span></div>`).join('')}
+  <p class="row"><select data-ls="${esc(l.id)}" style="width:auto">${['new', 'contacted', 'won', 'lost'].map(x => `<option ${x === l.status ? 'selected' : ''}>${x}</option>`).join('')}</select><a class="btn" href="mailto:${encodeURIComponent(l.email)}" style="padding:6px 12px">Email</a><button class="alt" data-ld="${esc(l.id)}">Delete</button></p></details>`).join('') || '<p class="mut">No leads yet.</p>'}</div>`;
+  $('#c_save').onclick = async () => {
+    const faq = $('#c_faq').value.split(/\n\s*\n/).map(b => { const q = b.match(/Q:\s*([\s\S]*?)\s*\n\s*A:\s*([\s\S]*)/i); return q ? { q: q[1].trim(), a: q[2].trim() } : null; }).filter(Boolean); const v = $('#c_mu').value.trim();
+    await api('/brand', { chat: { enabled: $('#c_on').checked, businessName: $('#c_name').value, tagline: $('#c_tag').value, welcome: $('#c_wel').value, faq, consent: $('#c_con').value, leadMagnet: { label: $('#c_ml').value, url: /^https?:\/\//.test(v) ? v : '', text: /^https?:\/\//.test(v) ? '' : v } } }); toast('Saved. Restart the app to apply on/off changes.'); leads(); };
+  const cp = $('#cp'); if (cp) cp.onclick = () => { navigator.clipboard?.writeText(link); toast('Copied'); };
+  document.querySelectorAll('[data-ls]').forEach(sel => (sel.onchange = async () => { await api('/leads/status', { id: sel.dataset.ls, status: sel.value }); toast('Saved'); }));
+  document.querySelectorAll('[data-ld]').forEach(b => (b.onclick = async () => { if (confirm('Delete this lead and its chat permanently?')) { await api('/leads/delete', { id: b.dataset.ld }); leads(); } }));
+}
+
+// ---------------------------------------------------------------- Guide
+async function guide() {
+  const g = await api('/guide');
+  $('#main').innerHTML = `<h2>Guide</h2><p class="sub">${g.doneCount} of ${g.steps.length} steps done. This list checks itself.</p>
+  <div class="card">${g.steps.map((x, i) => `<div class="step ${x.done ? 'done' : ''}"><div class="n">${x.done ? '✔' : i + 1}</div><div class="grow"><b>${esc(x.title)}</b><div class="mut">${esc(x.how)}</div><p class="row" style="margin:8px 0 0"><a class="btn" href="${esc(x.link)}" style="padding:5px 12px">Open</a>${x.confirm && !x.done ? `<button class="alt" data-c="${esc(x.confirm)}" style="padding:5px 12px">I logged in</button>` : ''}</p></div></div>`).join('')}</div>
+  <div class="card md"><h3>Every day</h3><ul><li>The app asks for new references and today's focus (a notification and a card on <b>Today</b>). Answer in 30 seconds.</li><li>Press <b>Make &amp; Post</b>. With "review before sharing" on, it stops at the final Share screen so you can look first.</li><li>Check <b>Analyze</b> once a week. Winners appear on <b>Repurpose</b>.</li></ul>
+  <h3>Keep usage low</h3><ul><li>Claude tab → <b>Eco</b>. Small tasks use haiku, identical prompts are cached, and code does lint, scoring, rendering and cutting for free.</li><li>The deep research and the style/script writing are the only sonnet tasks by default.</li></ul>
+  <h3>If something breaks</h3><ul><li>Run <code>node bin/reelkit.mjs doctor</code> in the project folder. It lists what is missing and the fix.</li><li>Posting stops with a message in the inbox when Instagram asks you to log in or verify. Do that in the Reelkit browser window, then press Resume.</li><li>Voices silent? Setup → Voice → pick one marked ready and press Preview.</li><li>Scheduled posts, daily check-ins and the chat link only work while the app is running.</li></ul></div>`;
+  document.querySelectorAll('[data-c]').forEach(b => (b.onclick = async () => { await api('/guide/confirm', { id: b.dataset.c }); guide(); }));
 }
 route();

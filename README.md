@@ -3,6 +3,8 @@
 **One click:** *references → idea → script → motion-graphics video (with a lip-synced presenter) → caption → post to Instagram → track results.*
 Runs on your own computer. Claude Code is the brain (your own plan, used sparingly); Chrome/Edge + ffmpeg are the studio; your Instagram is operated by Claude through a dedicated browser window. No subscription, no cloud.
 
+**New here? Read [`docs/GUIDE.md`](docs/GUIDE.md) (plain step-by-step) or open the in-app Guide tab.**
+
 Research on the product this is modelled on: [`docs/RESEARCH.md`](docs/RESEARCH.md) · what is built vs. untested: [`docs/PARITY.md`](docs/PARITY.md)
 
 ## What's in it
@@ -11,10 +13,13 @@ Research on the product this is modelled on: [`docs/RESEARCH.md`](docs/RESEARCH.
 | **Today (home)** | Big **Make & Post** button, run timeline, inbox (daily check-in, "any new references?", approve ideas, *review before sharing*), idea queue, usage meter |
 | **Claude control** | Eco / Balanced / Quality modes, per-task model table (haiku/sonnet/opus), result cache, daily call + token budgets, usage ledger, cheap-first escalation. See below |
 | **Computer use** | Claude drives a dedicated Chrome profile (Playwright MCP): posts the reel, reads insights, researches competitors. Browser survives between calls, so there is a real *prepare → you review → share* gate |
-| **Motion templates v2** | 30 styles, transitions (wipe/flash/zoom/glitch), camera pushes, grain, 17 widgets (counter, charts, **racing bars**, tier list, chat, notifications, donut, compare, timeline, browser, price, stats…), word-exact captions with key-word effects |
+| **Style library (50)** | 50 styles with thumbnails and mood/energy/niche tags. In *Auto*, code ranks the best fits for your brand and recent variety, and Claude picks from a short list inside the script call (no extra model call). Includes synthwave, sunburst, pop-halftone, pill and karaoke captions, glass, noir, notebook, kraft, matrix, bokeh and more |
+| **Motion v2 (engine)** | transitions, transitions (wipe/flash/zoom/glitch), camera pushes, grain, 17 widgets (counter, charts, **racing bars**, tier list, chat, notifications, donut, compare, timeline, browser, price, stats…), word-exact captions with key-word effects |
 | **Presenters** | Free built-in animated avatars (founder, robot, blob) lip-synced to the real audio; blink, brow-raise on key words, hand gestures. HeyGen supported if you have a key |
 | **Footage cutter** | Your own video: Whisper transcript → removes um/uh, "you know", stutters, dead air (click words to override) → punch-ins, audio cleanup, loudness → captions in any style |
-| **Voices** | Piper (offline, free), ElevenLabs, edge-tts, OS voices; 16 languages incl. RTL/CJK; captions are aligned to the real audio with Whisper |
+| **Voices** | Kokoro (free, offline, 54 voices), Piper (free, offline), ElevenLabs (your key), Edge voices, OS voices, with **Preview** buttons; 16 languages incl. RTL/CJK; captions aligned to the real audio with Whisper; generated sound effects |
+| **Deep research (first run)** | 4 cached stages with web search: your site, audience in their own words, competitors, strategy; produces a sourced report, a do-not-say list and 10 starter ideas that feed every script |
+| **Business chat + leads** | A public link for your bio: visitors enter name, email, need (with consent), then chat with an AI that only knows your facts and FAQ; leads, transcripts, CSV; rate limited with its own budget |
 | **Daily routine** | Asks for references and today's focus at your chosen time, shows yesterday's numbers, proposes ideas, can auto-run if you don't answer |
 | **Swipe / Analyze / Repurpose** | Outlier multipliers, D1/D3/D7 curves, ranks, carousels, hooks from winners (all as before) |
 | **App** | Electron desktop app with tray + native notifications + start-at-login, or a no-install Edge/Chrome app window |
@@ -57,6 +62,12 @@ reelkit render <reel> --style presenter-night --avatar founder --voice piper
 reelkit browser ; reelkit inbox ; reelkit daily ; reelkit dashboard --open|--lan ; reelkit worker
 ```
 Script visuals and the `style-maker` / `reel-studio` skills are as in `.claude/skills/`.
+
+## What changed in v0.4 (tested)
+* **Voices:** Kokoro and Piper both produce audio through the app; I checked intelligibility by transcribing the output with Whisper (English for both, Spanish for Kokoro). I cannot judge how natural they sound, so use the Preview buttons. Edge voices: **untested** (the sandbox blocks Microsoft's endpoint). ElevenLabs: untested until you add your key.
+* **50 styles + chooser:** every style has a rendered thumbnail; ranking verified in tests; the real autopilot run picks a style inside the script call.
+* **Deep research:** real run on a public product (Plausible Analytics) through Claude's web tools: 4 stages, real sources, honest "low-to-medium confidence" where forums could not be fetched, no invented Instagram handles.
+* **Business chat:** real conversation through Claude haiku: it quoted the FAQ, said "I'm not sure" about an integration that is not documented, refused a prompt-injection and a fake discount code, handed over the free resource, and declined off-topic requests; the page works in a browser and HTML injected into the form does not execute. Public tunnel (cloudflared) **untested** here.
 
 ## Honest status
 **Tested for real in this repo's environment:** the whole pipeline with live Claude calls (haiku + sonnet) including the reference gate, idea → script → lint → render → caption; Piper voice; Whisper alignment; the footage cutter on real synthesized speech (10.15 s → 6.58 s, fillers removed, captions overlaid) through the app's API with the worker in a child process; avatar lip-sync; 20+ widgets/styles by eye; Japanese and Hebrew; the web app in a browser (no JS errors); **Claude operating Chrome via Playwright MCP against a mock Instagram-style page** (upload → caption → stop → separate call → share, verified on the page); 27 unit tests.

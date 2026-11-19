@@ -39,3 +39,16 @@
 | Piper offline voices + Whisper-exact caption timing for any voice | ✅ |
 | Desktop app (Electron + tray + native notifications + start at login) | 🟡 written, **untested** (Electron download blocked here); no-install Edge/Chrome app window path ✅ logic, 🟡 on Windows |
 | Windows installer/shortcut scripts | 🟡 untested (no Windows machine) |
+
+
+## v0.4 additions
+| Capability | Status |
+|---|---|
+| Kokoro + Piper offline voices, provider catalog with previews | ✅ audio verified by Whisper transcription (I cannot judge naturalness) |
+| Edge voices | 🟡 untested here (network); ElevenLabs 🟡 (your key later) |
+| Generated sound effects (whoosh, pop, thud) | ✅ |
+| 50 styles with tags, thumbnails, chooser (code + Claude shortlist) | ✅ |
+| First-run deep research (4 web stages, sourced report, ideas, digest) | ✅ real run |
+| Business chat with lead capture, FAQ grounding, rate limits, own budget | ✅ real conversation + browser test · 🟡 public tunnel untested |
+| Leads tab (status, transcript, CSV, delete) | ✅ |
+| In-app Guide with self-ticking checklist + docs/GUIDE.md | ✅ |

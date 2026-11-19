@@ -23,6 +23,11 @@ export const TASKS = {
   analytics_summary: { desc: 'Plain-English read of the numbers (only if data changed)', eco: 'haiku', balanced: 'haiku',  quality: 'sonnet', effort: 'low',    ttlDays: 3 },
   translate:         { desc: 'Translate a script keeping numbers and visuals',          eco: 'haiku',  balanced: 'haiku',  quality: 'sonnet', effort: 'low',    ttlDays: 90 },
   style_make:        { desc: 'Generate a custom video style',                           eco: 'sonnet', balanced: 'sonnet', quality: 'opus',   effort: 'medium', ttlDays: 90 },
+  chat_reply:        { desc: 'Answer a website/Instagram visitor in the business chat', eco: 'haiku', balanced: 'haiku', quality: 'sonnet', effort: 'low', ttlDays: 0 },
+  research_site:     { desc: 'First-run: read your website and extract what you really offer', eco: 'sonnet', balanced: 'sonnet', quality: 'opus', effort: 'medium', ttlDays: 30, web: true },
+  research_audience: { desc: 'First-run: who buys, their pains and exact words (web search)', eco: 'sonnet', balanced: 'sonnet', quality: 'opus', effort: 'medium', ttlDays: 30, web: true },
+  research_competitors: { desc: 'First-run: competitors, adjacent accounts, angles (web search)', eco: 'sonnet', balanced: 'sonnet', quality: 'opus', effort: 'medium', ttlDays: 30, web: true },
+  research_strategy: { desc: 'First-run: pillars, 10 starter ideas, do-not-say list', eco: 'sonnet', balanced: 'sonnet', quality: 'opus', effort: 'medium', ttlDays: 30 },
   computer_post:     { desc: 'Drive the browser to post a reel',                        eco: 'haiku',  balanced: 'haiku',  quality: 'sonnet', effort: 'low',    ttlDays: 0, computer: true, escalate: true },
   computer_insights: { desc: 'Read reel insights off the website',                      eco: 'haiku',  balanced: 'haiku',  quality: 'sonnet', effort: 'low',    ttlDays: 0, computer: true, escalate: true },
   computer_research: { desc: 'Browse competitors/hashtags and list outlier reels',      eco: 'haiku',  balanced: 'sonnet', quality: 'sonnet', effort: 'low',    ttlDays: 1, computer: true, escalate: true },
@@ -32,7 +37,7 @@ export const TASKS = {
 export const CODE_ONLY = ['lint', 'virality score', 'render', 'caption timing', 'filler cutting', 'scheduling', 'analytics math', 'winner detection', 'carousel layout'];
 
 const settingsPath = () => path.join(home(), 'settings.json');
-export const DEFAULT_SETTINGS = { mode: 'balanced', routing: {}, budget: { dailyCalls: 60, dailyOutputTokens: 120000 }, cache: true, claudeBin: 'claude' };
+export const DEFAULT_SETTINGS = { mode: 'balanced', routing: {}, budget: { dailyCalls: 60, dailyOutputTokens: 120000, chatDaily: 200 }, cache: true, claudeBin: 'claude' };
 export const getSettings = () => ({ ...DEFAULT_SETTINGS, ...readJson(settingsPath(), {}), budget: { ...DEFAULT_SETTINGS.budget, ...(readJson(settingsPath(), {}).budget || {}) } });
 export const saveSettings = patch => { const s = { ...getSettings(), ...patch }; writeJson(settingsPath(), s); return s; };
 export function modelFor(task, settings = getSettings()) {
@@ -57,11 +62,12 @@ const keyOf = o => crypto.createHash('sha1').update(JSON.stringify(o)).digest('h
 /** Build the claude CLI argv for a task. Exported for tests and dry runs. */
 export function buildArgs({ task, prompt, system, schema, model, effort, maxTurns, mcpConfig, allowedTools, settings = getSettings() }) {
   const T = TASKS[task] || {}; const a = ['-p', prompt, '--model', model, '--output-format', 'json', '--no-session-persistence'];
-  a.push('--max-turns', String(maxTurns ?? (T.computer ? 40 : schema ? 3 : 2)));
+  a.push('--max-turns', String(maxTurns ?? (T.computer ? 40 : T.web ? 20 : schema ? 3 : 2)));
   if (effort || T.effort) a.push('--effort', effort || T.effort);
   if (system) a.push('--append-system-prompt', system);
   if (schema) a.push('--json-schema', JSON.stringify(schema));
-  if (T.computer) {
+  if (T.web) { a.push('--tools', 'WebSearch,WebFetch', '--allowedTools', 'WebSearch', 'WebFetch', '--permission-mode', 'dontAsk', '--disable-slash-commands', '--strict-mcp-config'); }
+  else if (T.computer) {
     a.push('--mcp-config', typeof mcpConfig === 'string' ? mcpConfig : JSON.stringify(mcpConfig), '--strict-mcp-config', '--disable-slash-commands', '--tools', '');
     if (allowedTools?.length) a.push('--allowedTools', ...allowedTools);
     a.push('--permission-mode', 'dontAsk');
@@ -95,8 +101,11 @@ export async function askClaude({ task, prompt, system, schema, validate, cacheK
   if (!force && settings.cache && T.ttlDays && fs.existsSync(cf)) {
     const c = readJson(cf, null); if (c && Date.now() - c.t < T.ttlDays * 864e5) { logUse({ t: new Date().toISOString(), task, model: c.model, cached: true }); return { output: c.output, model: c.model, cached: true, usage: null }; }
   }
-  const u = usageToday(); if (u.calls >= settings.budget.dailyCalls) throw new Error(`Daily Claude call budget reached (${u.calls}/${settings.budget.dailyCalls}). Raise it in the Claude tab or wait until tomorrow.`);
-  if (u.output >= settings.budget.dailyOutputTokens) throw new Error('Daily Claude output-token budget reached.');
+  // chat replies have their own daily bucket so visitors can never starve content creation (and vice versa)
+  const today0 = new Date(new Date().setHours(0, 0, 0, 0)); const rows = readLedger().filter(r => new Date(r.t) >= today0 && !r.cached); const isChat = task === 'chat_reply';
+  const used = rows.filter(r => (r.task === 'chat_reply') === isChat).length; const cap = isChat ? (settings.budget.chatDaily ?? 200) : settings.budget.dailyCalls;
+  if (used >= cap) throw new Error(isChat ? 'chat budget reached' : `Daily Claude call budget reached (${used}/${cap}). Raise it in the Claude tab or wait until tomorrow.`);
+  if (!isChat && rows.filter(r => r.task !== 'chat_reply').reduce((a, r) => a + (r.output || 0), 0) >= settings.budget.dailyOutputTokens) throw new Error('Daily Claude output-token budget reached.');
   let lastErr = null;
   for (const m of ladder) {
     const args = buildArgs({ task, prompt, system, schema, model: m, mcpConfig, allowedTools, maxTurns, settings });

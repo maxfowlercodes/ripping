@@ -5,7 +5,7 @@ export const RULES = `Script format: one line per beat. Beat 1 is the hook: at m
 
 export const schemas = {
   ideas: { type: 'object', properties: { ideas: { type: 'array', items: { type: 'object', properties: { hook: { type: 'string' }, payoff: { type: 'string' }, borrows: { type: 'string' } }, required: ['hook', 'payoff'] } } }, required: ['ideas'] },
-  script: { type: 'object', properties: { title: { type: 'string' }, lines: { type: 'array', items: { type: 'string' } } }, required: ['title', 'lines'] },
+  script: { type: 'object', properties: { title: { type: 'string' }, style: { type: 'string' }, lines: { type: 'array', items: { type: 'string' } } }, required: ['title', 'lines'] },
   caption: { type: 'object', properties: { caption: { type: 'string' }, hashtags: { type: 'array', items: { type: 'string' } } }, required: ['caption', 'hashtags'] },
   hooks: { type: 'object', properties: { hooks: { type: 'array', items: { type: 'object', properties: { text: { type: 'string' }, formula: { type: 'string' } }, required: ['text'] } } }, required: ['hooks'] },
   refAnalysis: { type: 'object', properties: { formula: { type: 'string' }, structure: { type: 'string' }, payoff: { type: 'string' }, cta: { type: 'string' }, whyItWorked: { type: 'string' } }, required: ['formula', 'whyItWorked'] },
@@ -23,7 +23,7 @@ Recent posts (do not repeat): ${recent.slice(0, 8).join(' | ') || 'none'}
 
 Give ${n} reel ideas for this product. Each: hook (<=8 words), payoff (one line the viewer gets), borrows (which reference's structure, or a formula name).`;
 
-export const scriptPrompt = ({ brand, idea, refs, lang = 'en' }) => `${brandFacts(brand)}
+export const scriptPrompt = ({ brand, idea, refs, lang = 'en', styles }) => `${brandFacts(brand)}${brand.researchDigest ? '\n\nResearch digest (use the customers\' own words, avoid the do-not-say list):\n' + brand.researchDigest : ''}
 
 Write ONE reel script.
 Idea hook: ${idea.hook}
@@ -32,7 +32,7 @@ ${idea.borrows ? 'Structure inspiration: ' + idea.borrows : ''}
 ${refs.slice(0, 3).map(r => `Reference: "${r.caption.slice(0, 120)}"`).join('\n')}
 Language: ${lang}.
 ${RULES}
-Return {title, lines[]} where each line is one beat INCLUDING its directive and *key* marks.`;
+${styles?.length ? `Also choose the visual style that best fits this script's mood from this list and return its exact name in "style":\n${styles.map(x => `- ${x.name}: ${x.desc}`).join('\n')}\n` : ''}Return {title${styles?.length ? ', style' : ''}, lines[]} where each line is one beat INCLUDING its directive and *key* marks.`;
 
 export const lintFixPrompt = ({ lines, issues }) => `Fix ONLY these problems in the script below, changing as little as possible. Keep every directive and *key* mark. Return {title, lines[]}.
 Problems:\n${issues.map(i => '- ' + i).join('\n')}

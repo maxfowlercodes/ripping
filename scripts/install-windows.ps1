@@ -7,8 +7,9 @@ Write-Host "`nIf node/python were just installed, close this window, open a NEW 
 if ((Get-Command node -ErrorAction SilentlyContinue) -and (Get-Command python -ErrorAction SilentlyContinue)) {
   Set-Location (Resolve-Path "$PSScriptRoot\..")
   npm install                                       # playwright-core + bundled ffmpeg (optional deps)
-  python -m pip install --upgrade piper-tts faster-whisper edge-tts   # offline voices, speech recognition, extra voices
-  node bin\reelkit.mjs voices install en            # downloads the default offline voice (~60 MB)
+  python -m pip install --upgrade piper-tts faster-whisper edge-tts kokoro-onnx soundfile   # voices + speech recognition
+  node bin\reelkit.mjs voices install piper en     # small offline voice (~60 MB)
+  node bin\reelkit.mjs voices install kokoro       # best free voice (~350 MB, one time)
   Write-Host "Optional: npm install -g @anthropic-ai/claude-code   then run  claude  once to sign in (needed for the AI parts)."
   powershell -ExecutionPolicy Bypass -File scripts\create-shortcut.ps1
   node bin\reelkit.mjs doctor

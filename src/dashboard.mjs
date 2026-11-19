@@ -23,6 +23,10 @@ import { startRun, answerGate, listRuns, getRun, cancelRun } from './autopilot.m
 import { listIdeas, setIdea, generateIdeas, referenceCount } from './ideas.mjs';
 import { addFromText } from './swipe.mjs';
 import { ensureBrowser } from './computer.mjs';
+import { getLeads, leadsCsv, statusFile } from './chat.mjs';
+import { loadCatalog } from './stylecatalog.mjs';
+import { getResearch } from './research.mjs';
+import { voiceCatalog, synth } from './voice.mjs';
 import { browserAvailable, findBrowser } from './browser.mjs';
 
 const web = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'web');
@@ -60,13 +64,44 @@ export function startDashboard({ port = 4177, lan = false, worker = true, open =
       const p = u.pathname; const body = req.method === 'POST' && p !== '/api/footage/upload' ? await readBody(req) : {};
 
       if (p === '/api/state') {
-        if (!stylesCache) { try { stylesCache = await styleList(); } catch { stylesCache = []; } }
+        if (!stylesCache) { try { const cat = loadCatalog(); stylesCache = Object.keys(cat).length ? Object.values(cat).map(c => ({ name: c.name, desc: c.desc, tags: c.tags, presenter: c.presenter })) : await styleList(); } catch { stylesCache = []; } }
         return send(res, 200, { reels: listReels(), styles: stylesCache, accounts: listAccounts(), jobs: listJobs().slice(0, 12), provider: detectProvider('auto'),
           health: { ffmpeg: has('ffmpeg'), browser: browserAvailable() && !!findBrowser(), font: !!findFont(), instagram: listAccounts().length > 0, elevenlabs: !!process.env.ELEVENLABS_API_KEY, heygen: !!process.env.HEYGEN_API_KEY } });
       }
       if (p === '/api/reel' && req.method === 'POST') { const s = createReel(body.title || 'Untitled', body.text || `# ${body.title || 'Untitled'}\nYour hook here.\n`); return send(res, 200, { slug: s }); }
       let m;
 
+
+      if (p === '/api/leads') return send(res, 200, { leads: getLeads(), status: readJson(statusFile(), null), chat: getBrand().chat });
+      if (p === '/api/leads.csv') { res.writeHead(200, { 'content-type': 'text/csv', 'content-disposition': 'attachment; filename="leads.csv"' }); return res.end(leadsCsv(getLeads())); }
+      if (p === '/api/leads/status' && req.method === 'POST') { const f = path.join(home(), 'leads.json'); const d = readJson(f, { items: [] }); const l = d.items.find(x => x.id === body.id); if (l && ['new', 'contacted', 'won', 'lost'].includes(body.status)) l.status = body.status; writeJson(f, d); return send(res, 200, { ok: true }); }
+      if (p === '/api/leads/delete' && req.method === 'POST') { const f = path.join(home(), 'leads.json'); const d = readJson(f, { items: [] }); d.items = d.items.filter(x => x.id !== body.id); writeJson(f, d); return send(res, 200, { ok: true }); }
+      if (p === '/api/research') return send(res, 200, { research: getResearch(), report: fs.existsSync(path.join(home(), 'research.md')) ? fs.readFileSync(path.join(home(), 'research.md'), 'utf8') : '' });
+      if (p === '/api/research/run' && req.method === 'POST') return send(res, 200, enqueue('research', { force: !!body.force }));
+      if (p === '/api/voices') return send(res, 200, { providers: voiceCatalog(), auto: detectProvider('auto') });
+      if (p === '/api/voices/preview' && req.method === 'POST') {
+        const prov = String(body.provider || 'auto').replace(/[^\w-]/g, ''); const lang = String(body.lang || 'en').replace(/[^\w-]/g, ''); const vid = String(body.voiceId || '').replace(/[^\w.-]/g, ''); const dir = ensureDir(path.join(home(), 'voice-previews')); const base = path.join(dir, `${prov}_${vid || 'default'}_${lang}`);
+        const out = fs.existsSync(base + '.wav') ? { file: base + '.wav' } : fs.existsSync(base + '.mp3') ? { file: base + '.mp3' } : await synth(String(body.text || 'Stop posting reels nobody watches. Open with the result instead.').slice(0, 200), base, prov === 'auto' ? detectProvider('auto') : prov, { lang, voiceId: vid || undefined });
+        if (!out.file) return send(res, 500, { error: 'That voice produced no audio. Check it is installed (see Setup → Voice).' }); return send(res, 200, { url: '/voice-preview/' + path.basename(out.file) });
+      }
+      if ((m = p.match(/^\/voice-preview\/([\w.-]+\.(wav|mp3))$/))) { const f = path.join(home(), 'voice-previews', m[1]); if (!fs.existsSync(f)) return send(res, 404, '', 'text/plain'); res.writeHead(200, { 'content-type': m[2] === 'wav' ? 'audio/wav' : 'audio/mpeg' }); return fs.createReadStream(f).pipe(res); }
+      if ((m = p.match(/^\/styles\/previews\/([\w-]+\.jpg)$/))) { const f = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'styles', 'previews', m[1]); if (!fs.existsSync(f)) return send(res, 404, '', 'text/plain'); res.writeHead(200, { 'content-type': 'image/jpeg', 'cache-control': 'max-age=3600' }); return fs.createReadStream(f).pipe(res); }
+
+      if (p === '/api/guide') {
+        const b = getBrand(); const st = readJson(path.join(home(), 'state.json'), {}); const rsr = getResearch(); const reelsDone = listReels().some(r => r.rendered);
+        const steps = [
+          { id: 'claude', title: 'Install Claude Code and sign in', done: claudeAvailable(), how: 'Install: npm i -g @anthropic-ai/claude-code. Then open a terminal, type claude, and sign in with your Claude account. Come back and press "Test Claude" in the Claude tab.', link: '#claude' },
+          { id: 'brand', title: 'Describe your business', done: missingBrand().length === 0, how: 'Setup → Your brand. Fill in product, audience, their problem and a CTA keyword. Add real proof points (number = claim). Claude may only use numbers you list.', link: '#setup' },
+          { id: 'research', title: 'Run the first-time deep research', done: !!rsr?.finished, how: 'Research tab → Run. Four stages (your site, your audience, competitors, strategy) take 5 to 10 minutes and are saved. Add your website URL in Setup first for better results.', link: '#research' },
+          { id: 'voice', title: 'Pick a voice and listen to it', done: !!st.voiceChecked, how: 'Setup → Voice. Press Preview on a few voices. Kokoro is the best free one (pip install kokoro-onnx soundfile, then reelkit voices install kokoro). Add ElevenLabs later with reelkit key elevenlabs <key>.', link: '#setup' },
+          { id: 'iglogin', title: 'Log in to Instagram in the Reelkit browser', done: !!st.igLoginConfirmed || b.posting.method !== 'computer', how: 'Setup → Posting → "Open Reelkit browser". Log in to Instagram in the window that opens (once), then press "I logged in" below. The login is stored in a separate browser profile on this computer.', link: '#setup', confirm: 'igLoginConfirmed' },
+          { id: 'refs', title: 'Save 3 reference reels', done: referenceCount() >= b.daily.minReferences, how: 'Today → paste lines like: https://instagram.com/... | 2.4M | 170K | their hook. Or Swipe tab → add. Claude copies structure, never wording.', link: '#today' },
+          { id: 'first', title: 'Make your first reel', done: reelsDone, how: 'Today → Make & Post with "render only" first. Watch it in Produce, then try "review before sharing".', link: '#today' },
+          { id: 'chat', title: '(Optional) Turn on the business chat', done: b.chat.enabled, how: 'Leads tab → turn on, fill in the FAQ, and share the link in your Instagram bio. Visitors give name + email, then chat with an AI that only knows what you told it.', link: '#leads' },
+        ];
+        return send(res, 200, { steps, doneCount: steps.filter(x => x.done).length });
+      }
+      if (p === '/api/guide/confirm' && req.method === 'POST') { const f = path.join(home(), 'state.json'); const d = readJson(f, {}); if (['igLoginConfirmed', 'voiceChecked'].includes(body.id)) d[body.id] = true; writeJson(f, d); return send(res, 200, { ok: true }); }
       if (p === '/api/today') {
         const open_ = listInbox('open'); const runs = listRuns().slice(0, 3); const st = getSettings(); const u = usageToday();
         return send(res, 200, { brandMissing: missingBrand(), inbox: open_, runs, ideas: listIdeas('new').concat(listIdeas('approved')).slice(0, 8), refs: referenceCount(), mode: st.mode, usage: u, budget: st.budget, posting: getBrand().posting, claude: claudeAvailable() });

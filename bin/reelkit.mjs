@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { parseScript, lint, virality } from '../src/script.mjs';
 import { renderReel as renderBasic } from '../src/render.mjs';
-import { renderReel2, renderCarouselPng, styleList } from '../src/render2.mjs';
+import { renderReel2, renderCarouselPng, styleList, renderStylePreviews, styleInfo } from '../src/render2.mjs';
 import { detectProvider } from '../src/voice.mjs';
 import { publishReel, accountInsights } from '../src/instagram.mjs';
 import { createReel, getMeta, saveMeta, listReels, scriptPath, reelDir } from '../src/store.mjs';
@@ -25,8 +25,10 @@ import { generateIdeas, listIdeas } from '../src/ideas.mjs';
 import { dailyTick } from '../src/daily.mjs';
 import { ensureBrowser, researchReels } from '../src/computer.mjs';
 import { captionFootage } from '../src/footagecap.mjs';
-import { installPiperVoice, piperAvailable, PIPER_VOICES } from '../src/voice.mjs';
+import { installPiperVoice, piperAvailable, PIPER_VOICES, installKokoro, voiceCatalog, synth, kokoroAvailable } from '../src/voice.mjs';
 import { whisperAvailable } from '../src/transcribe.mjs';
+import { runResearch, getResearch, STAGES } from '../src/research.mjs';
+import { startChatServer, getLeads, leadsCsv } from '../src/chat.mjs';
 
 applySecrets(); ensureMediaTools();
 const [cmd, ...rest] = process.argv.slice(2);
@@ -44,7 +46,7 @@ const help = `reelkit: free local short-form video studio (swipe > script > prod
  PRODUCE  styles | render <reel> [--style s] [--voice v] [--lang xx] [--music f] [--draft] [--avatar founder|robot|blob|heygen:ID:VOICE] [--basic]
           footage <video> [--level light|standard|aggressive] [--style volt] [--dry]   (filler/stutter/pause cutter + audio clean + captions)
           voices [install <lang>]
- AI       brand [set k v] | mode [eco|balanced|quality] | route <task> <model> | usage | claude | ideas [--generate] | refs [add "url | views | baseline | caption"]
+ AI       brand [set k v] | deep-research [--refresh] | chat [--no-tunnel] | leads [--csv] | mode [eco|balanced|quality] | route <task> <model> | usage | claude | ideas [--generate] | refs [add "url | views | baseline | caption"]
           autopilot [--post review|auto|none] [--at ISO]  (one-click Make & Post) | autopilot status|answer|resume | inbox | daily | research --handles a,b | browser
  POST     queue <reel> --at ISO [--caption "..."] [--account A] [--trial] | post <reel> | post --due
  ANALYZE  analyze | rank | calibrate
@@ -73,7 +75,7 @@ try {
       ok(!!findFont(), 'bold font', 'set REELKIT_FONT');
       ok(browserAvailable() && !!findBrowser(), `Chrome/Edge + playwright-core (motion renderer)${findBrowser() ? ': ' + findBrowser() : ''}`, 'npm install   (needs Chrome or Edge installed)');
       console.log(`  voice provider: ${detectProvider('auto')}`);
-      ok(piperAvailable(), 'Piper offline voices (free, recommended)', 'pip install piper-tts ; reelkit voices install en'); ok(whisperAvailable(), 'faster-whisper (filler-word cutting, exact caption sync)', 'pip install faster-whisper');
+      ok(kokoroAvailable(), 'Kokoro offline voices (free, best quality)', 'pip install kokoro-onnx soundfile ; reelkit voices install kokoro'); ok(piperAvailable(), 'Piper offline voices (free, lighter)', 'pip install piper-tts ; reelkit voices install en'); ok(whisperAvailable(), 'faster-whisper (filler-word cutting, exact caption sync)', 'pip install faster-whisper');
       ok(listAccounts().length > 0, `Instagram accounts: ${listAccounts().map(a => a.name).join(', ') || 'none'}`, 'reelkit account add ... (docs/INSTAGRAM.md)');
       ok(!!process.env.HEYGEN_API_KEY, 'HeyGen key (optional)'); ok(has('claude'), 'Claude Code CLI (optional AI brain)', 'npm i -g @anthropic-ai/claude-code');
       console.log('  data dir: ' + home() + '\n  secrets : ' + secretsPath()); break; }
@@ -85,7 +87,9 @@ try {
     case 'list': for (const r of listReels()) console.log(`${r.slug.padEnd(34)} ${String(r.status).padEnd(9)} ${r.scheduledAt || ''}`); break;
     case 'lint': { const r = lint(load(pos[0])); for (const c of r.checks) console.log(`${c.pass ? '✔' : '✘'} ${c.msg}`); console.log(`\nScore ${r.score}/100  (~${r.speakSeconds.toFixed(0)}s spoken)`); break; }
     case 'score': { const m = getMeta(need(pos[0])); const v = virality(load(pos[0]), m.durations); console.log(JSON.stringify(v, null, 2)); m.virality = { score: v.score, estSkipRate: v.estSkipRate, avgWatchSeconds: v.avgWatchSeconds }; saveMeta(pos[0], m); break; }
-    case 'styles': { try { for (const s of await styleList()) console.log(s.name.padEnd(20) + s.desc); } catch (e) { console.log('(browser unavailable) ' + e.message); } break; }
+    case 'styles': {
+      if (flags.previews) { const n = await renderStylePreviews(path.join(process.cwd(), 'styles', 'previews'), path.join(process.cwd(), 'styles', 'catalog.json')); console.log(`wrote ${n} previews + styles/catalog.json`); break; }
+      if (pos[0] === 'pick') { const { rankStyles } = await import('../src/stylecatalog.mjs'); for (const r of rankStyles({ brand: getBrand() }).slice(0, 8)) console.log(`${String(r.score).padStart(5)}  ${r.name.padEnd(18)} ${r.why}`); break; } try { for (const s of await styleList()) console.log(s.name.padEnd(20) + s.desc); } catch (e) { console.log('(browser unavailable) ' + e.message); } break; }
     case 'branch': { const s = branch(need(pos[0]), pos[1] || 'Branch', fs.readFileSync(flags.lines, 'utf8').split(/\r?\n/).filter(Boolean)); console.log('Created ' + s); break; }
     case 'render': {
       const s = need(pos[0]); const sc = load(s); const m = getMeta(s); const style = flags.style || m.style || sc.style || 'aurora-dark'; const lang = flags.lang || m.lang || 'en';
@@ -106,10 +110,11 @@ try {
       if (flags['no-captions']) { console.log('✔ ' + out); break; }
       const o2 = out.replace(/\.mp4$/, '.captioned.mp4'); await captionFootage({ video: out, words: p.captionWords, style: flags.style || 'volt', out: o2, lang, y: flags.y ? +flags.y : 1060 }); console.log('✔ ' + o2); break; }
     case 'voices': {
-      if (pos[0] === 'install') { const m = await installPiperVoice(pos[1] || 'en'); console.log('installed ' + m + (piperAvailable() ? '' : '\nnow: pip install piper-tts')); }
-      else console.log(`piper: ${piperAvailable() ? 'installed' : 'missing (pip install piper-tts)'}   whisper: ${whisperAvailable() ? 'installed' : 'missing (pip install faster-whisper)'}\nlanguages: ${Object.keys(PIPER_VOICES).join(' ')}`); break; }
+      if (pos[0] === 'install') { if (pos[1] === 'kokoro') { await installKokoro(console.log); console.log(kokoroAvailable() ? 'Kokoro ready' : 'files downloaded; now run: pip install kokoro-onnx soundfile'); } else { const m = await installPiperVoice(pos[1] === 'piper' ? (pos[2] || 'en') : (pos[1] || 'en')); console.log('installed ' + m + (piperAvailable() ? '' : '\nnow: pip install piper-tts')); } break; }
+      if (pos[0] === 'test') { const prov = pos[1] || 'auto'; const p0 = prov === 'auto' ? detectProvider('auto') : prov; const out = path.resolve(flags.out || `voice-${p0}.wav`); const r = await synth(String(flags.text || 'Stop posting reels nobody watches. Open with the result instead.'), out.replace(/\.\w+$/, ''), p0, { lang: flags.lang || 'en', voiceId: flags.voice }); console.log(r.file ? `✔ ${r.file} (${r.seconds.toFixed(1)}s)` : 'provider produced no audio'); break; }
+      for (const v of voiceCatalog()) console.log(`${v.available ? '✔' : '✘'} ${v.id.padEnd(11)} ${'★'.repeat(v.quality).padEnd(5)} ${v.kind.padEnd(28)} ${v.available ? '' : v.install}`); console.log('\nauto picks: ' + detectProvider('auto') + '   |   reelkit voices test <provider> [--voice id] [--lang en]'); break; }
     case 'brand': {
-      if (pos[0] === 'set') { const [k, ...v] = pos.slice(1); const val = v.join(' '); const patch = {}; if (['product', 'audience', 'problem', 'tone', 'cta', 'niche'].includes(k)) patch[k] = val; else if (k === 'competitors') patch.competitors = val.split(',').map(x => x.trim()).filter(Boolean); else if (k === 'proof') patch.proof = val.split(';').map(x => { const [claim, number] = x.split('='); return { claim: claim.trim(), number: (number || '').trim() }; }); else if (k === 'style' || k === 'avatar' || k === 'voice' || k === 'lang') patch.production = { [k]: val }; else if (k === 'method' || k === 'mode' || k === 'username' || k === 'account') patch.posting = { [k]: val }; else if (k === 'daily') patch.daily = { time: val }; else if (k === 'autopilot') patch.daily = { autopilot: val === 'on' }; else throw new Error('unknown key ' + k); saveBrand(patch); }
+      if (pos[0] === 'set') { const [k, ...v] = pos.slice(1); const val = v.join(' '); const patch = {}; if (['product', 'audience', 'problem', 'tone', 'cta', 'niche'].includes(k)) patch[k] = val; else if (k === 'website') patch.website = val; else if (k === 'competitors') patch.competitors = val.split(',').map(x => x.trim()).filter(Boolean); else if (k === 'proof') patch.proof = val.split(';').map(x => { const [claim, number] = x.split('='); return { claim: claim.trim(), number: (number || '').trim() }; }); else if (k === 'style' || k === 'avatar' || k === 'voice' || k === 'lang') patch.production = { [k]: val }; else if (k === 'method' || k === 'mode' || k === 'username' || k === 'account') patch.posting = { [k]: val }; else if (k === 'daily') patch.daily = { time: val }; else if (k === 'autopilot') patch.daily = { autopilot: val === 'on' }; else throw new Error('unknown key ' + k); saveBrand(patch); }
       console.log(JSON.stringify(getBrand(), null, 2)); const m = missingBrand(); if (m.length) console.log('\nMissing: ' + m.join(', ')); break; }
     case 'mode': { if (pos[0]) saveSettings({ mode: pos[0] }); const st = getSettings(); console.log('mode: ' + st.mode); for (const t of Object.keys(TASKS)) console.log('  ' + t.padEnd(20) + modelFor(t, st).padEnd(8) + TASKS[t].desc); console.log('\nNever sent to a model (code does it): ' + CODE_ONLY.join(', ')); break; }
     case 'route': { if (!pos[0] || !pos[1]) throw new Error('usage: route <task> haiku|sonnet|opus|auto'); const st = getSettings(); const r = { ...st.routing }; if (pos[1] === 'auto') delete r[pos[0]]; else r[pos[0]] = pos[1]; saveSettings({ routing: r }); console.log(pos[0] + ' -> ' + modelFor(pos[0])); break; }
@@ -117,6 +122,9 @@ try {
     case 'claude': { if (!claudeAvailable()) throw new Error('claude CLI not found'); const r = await askClaude({ task: 'caption_hashtags', prompt: 'Reply JSON {"caption":"ok","hashtags":["#a"]}', schema: { type: 'object', properties: { caption: { type: 'string' }, hashtags: { type: 'array', items: { type: 'string' } } }, required: ['caption', 'hashtags'] }, force: true }); console.log(`✔ Claude works (${r.model}, ${r.usage.output} output tokens)`); break; }
     case 'ideas': { if (flags.generate) { const f = await generateIdeas({ n: 5, log: console.log }); console.log('added ' + f.length); } for (const i of listIdeas()) console.log(`${i.status.padEnd(9)} ${i.id}  ${i.hook}  - ${i.payoff}`); break; }
     case 'refs': { if (pos[0] === 'add') { const n = swipe.addFromText(pos.slice(1).join(' ') || fs.readFileSync(flags.file, 'utf8'), flags.niche); console.log('saved ' + n); } else for (const i of swipe.listSwipe({ status: 'saved' })) console.log(`${String(i.multiplier).padStart(5)}x ${i.creator.padEnd(14)} ${i.caption.slice(0, 80)}`); break; }
+    case 'chat': { saveBrand({ chat: { enabled: true } }); const cs = await startChatServer({ tunnel: !flags['no-tunnel'] && getBrand().chat.tunnel, lan: !!flags.lan }); console.log('Link to share: ' + cs.status.url + (cs.status.error ? '\n(no public tunnel: ' + cs.status.error + ')' : '')); console.log('Leads are saved to ' + path.join(home(), 'leads.json') + '  (reelkit leads)'); setInterval(() => {}, 1 << 30); break; }
+    case 'leads': { const L = getLeads(); if (flags.csv) { console.log(leadsCsv(L)); break; } for (const l of L) console.log(`${l.created.slice(0, 16)}  ${l.status.padEnd(9)} ${l.name} <${l.email}>  ${l.need.slice(0, 70)}  (${l.transcript.length} msgs)`); if (!L.length) console.log('no leads yet'); break; }
+    case 'deep-research': { const r = await runResearch({ force: !!flags.refresh, log: console.log }); console.log(`\n✔ ${Object.entries(r.stages).map(([k, v]) => k + ':' + v.status).join('  ')}\nReport: ${path.join(home(), 'research.md')}`); break; }
     case 'research': { const r = await researchReels({ handles: (flags.handles || getBrand().competitors.join(',')).split(',').filter(Boolean), hashtags: String(flags.tags || '').split(',').filter(Boolean), log: console.log }); const by = {}; r.forEach(x => (by[x.creator] = by[x.creator] || []).push(x.views)); for (const x of r) { const med = by[x.creator].sort((a, b) => a - b)[Math.floor(by[x.creator].length / 2)]; swipe.addItem({ url: x.url, creator: x.creator, views: x.views, likes: x.likes, comments: x.comments, caption: x.caption, followers: x.followers, baseline: x.followers || med, niche: getBrand().niche || 'general', source: 'research' }); } console.log(`added ${r.length} reels to Swipe`); break; }
     case 'browser': { const r = await ensureBrowser(); console.log(r.launched ? 'Reelkit browser opened. Log in to Instagram there once; the login is kept in its profile.' : 'Reelkit browser already running.'); break; }
     case 'inbox': { if (pos[0] === 'done' && pos[1]) { resolveItem(pos[1], {}); } for (const i of listInbox('open')) console.log(`${i.id}  [${i.type}] ${i.title}\n     ${i.body.replace(/\n/g, '\n     ')}`); break; }
@@ -144,7 +152,7 @@ try {
     case 'analyze': { const n = await snapshotDue(console.log); const s = summary(); console.log(`${n} snapshots. total views ${s.totalViews}, rank ${s.rank.name}`); for (const r of s.reels) console.log(`${r.winner ? '★ ' : '  '}${r.title.padEnd(36)} ${String(r.views).padStart(8)} views  D1:${r.d1 ?? '-'} D3:${r.d3 ?? '-'} D7:${r.d7 ?? '-'}`); try { if (listAccounts().length) console.log(await accountInsights(flags.account)); } catch (e) { console.log('account insights: ' + e.message); } break; }
     case 'rank': { const r = summary().rank; console.log(`${r.name}  (${r.total} views)${r.next ? `  next: ${r.next.name} at ${r.next.at}` : ''}`); break; }
     case 'calibrate': console.log(JSON.stringify(calibrate(), null, 2)); break;
-    case 'worker': { if (!flags.child) console.log('worker running (Ctrl+C to stop): renders, scheduled posts, daily check-ins, analytics'); startWorker(); setInterval(() => {}, 1 << 30); break; }
+    case 'worker': { if (!flags.child) console.log('worker running (Ctrl+C to stop): renders, scheduled posts, daily check-ins, analytics'); startWorker(); const bc = getBrand().chat; if (bc.enabled) { const cs = await startChatServer({ tunnel: bc.tunnel }); if (cs.status.url) console.log('Business chat link: ' + cs.status.url + (cs.status.error ? '  (' + cs.status.error + ')' : '')); } setInterval(() => {}, 1 << 30); break; }
     case 'dashboard': startDashboard({ port: Number(flags.port) || 4177, lan: !!flags.lan, worker: !flags['no-worker'], open: !!flags.open }); break;
     default: console.log(help);
   }
