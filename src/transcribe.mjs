@@ -1,7 +1,7 @@
 // Local speech-to-text with word timestamps (faster-whisper). Audio is decoded by ffmpeg, so no PyAV dependency.
 import fs from 'node:fs';
 import path from 'node:path';
-import { run, has, isWin } from './util.mjs';
+import { run, has, isWin, pyCan } from './util.mjs';
 
 const PY = () => process.env.REELKIT_PYTHON || (isWin ? 'python' : 'python3');
 const SCRIPT = `
@@ -25,9 +25,7 @@ print(json.dumps({"words": words, "language": info.language, "duration": info.du
 // A verbatim-style prompt makes Whisper keep "um/uh" instead of silently dropping them.
 export const VERBATIM_PROMPT = "Umm, uh, so, like, you know, I mean, uh... basically, um, actually. Hmm, er, well, yeah.";
 
-export function whisperAvailable() {
-  const r = run(PY(), ['-c', 'import faster_whisper']); return r.ok;
-}
+export function whisperAvailable() { return pyCan('faster_whisper'); }
 
 /** Returns {words:[{t,s,e,p}], language, duration} or {error}. Model: tiny.en | base | small | medium | large-v3 (downloaded on first use). */
 export function transcribe(file, { lang = 'en', model, verbatim = true } = {}) {

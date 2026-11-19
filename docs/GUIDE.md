@@ -49,11 +49,14 @@ The app notifies you with a **Daily check-in** at your chosen time: add new refe
 ## 6. What it costs (your Claude plan)
 Measured in my tests, Eco mode: a reel from idea to caption ≈ 6 calls (5 haiku, 1 sonnet), ≈ 5k output tokens. First-time deep research ≈ 4 sonnet calls, ≈ 11k output tokens (one time). 5 chat replies ≈ 5 haiku calls, ≈ 0.7k output tokens. Browser posting reads page snapshots, so it uses mostly *input* tokens. Cached results cost nothing. Claude tab shows live usage and lets you cap it.
 
+## 6b. Updating
+Close Reelkit, then in PowerShell from the Reelkit folder: `powershell -ExecutionPolicy Bypass -File scripts\update-windows.ps1`. It downloads the latest version and keeps your data and installed packages.
+
 ## 7. Troubleshooting
 | Symptom | Fix |
 |---|---|
 | Something is missing | `node bin\reelkit.mjs doctor` lists it with the fix |
-| "Claude Code CLI not found" | install it and run `claude` once to sign in |
+| "Claude Code CLI not found" | install it and run `claude` once to sign in. Reelkit finds the npm `.cmd` shim on Windows by itself; if it still says not found, run `where claude` and tell me what it prints |
 | Posting stops with "log in" | open the Reelkit browser window, log in or pass the check, press Resume in the inbox card |
 | No sound / robotic voice | Setup → Voice → pick one marked *ready*, Preview; install Kokoro |
 | Captions out of sync | install faster-whisper (`pip install faster-whisper`); Reelkit then aligns captions to the real audio |

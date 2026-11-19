@@ -1,6 +1,6 @@
 {
   "name": "reelkit",
-  "version": "0.4.0",
+  "version": "0.5.1",
   "description": "Free, local, Claude-Code-driven short-form video pipeline: research, script, voice, render, post, analyze, repurpose.",
   "type": "module",
   "bin": {

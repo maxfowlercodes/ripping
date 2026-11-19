@@ -1,13 +1,13 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import { run, has, isWin, isMac, probeDuration, ensureDir } from './util.mjs';
+import { run, has, pyCan, PYTHON as PYBIN, isWin, isMac, probeDuration, ensureDir } from './util.mjs';
 
 export const EDGE_VOICES = { en: 'en-US-AndrewNeural', es: 'es-ES-AlvaroNeural', fr: 'fr-FR-HenriNeural', it: 'it-IT-DiegoNeural', pt: 'pt-BR-AntonioNeural', de: 'de-DE-ConradNeural', ja: 'ja-JP-KeitaNeural', ko: 'ko-KR-InJoonNeural', zh: 'zh-CN-YunxiNeural', hi: 'hi-IN-MadhurNeural', ru: 'ru-RU-DmitryNeural', uk: 'uk-UA-OstapNeural', he: 'he-IL-AvriNeural', ar: 'ar-SA-HamedNeural', el: 'el-GR-NestorasNeural', tr: 'tr-TR-AhmetNeural', nl: 'nl-NL-MaartenNeural', pl: 'pl-PL-MarekNeural' };
 // Piper: free, offline neural TTS (pip install piper-tts). Voices are downloaded once from Hugging Face (rhasspy/piper-voices).
 export const PIPER_VOICES = { en: 'en/en_US/lessac/medium/en_US-lessac-medium', 'en-gb': 'en/en_GB/alan/medium/en_GB-alan-medium', es: 'es/es_ES/davefx/medium/es_ES-davefx-medium', fr: 'fr/fr_FR/siwis/medium/fr_FR-siwis-medium', de: 'de/de_DE/thorsten/medium/de_DE-thorsten-medium', it: 'it/it_IT/riccardo/x_low/it_IT-riccardo-x_low', pt: 'pt/pt_BR/faber/medium/pt_BR-faber-medium', ru: 'ru/ru_RU/dmitri/medium/ru_RU-dmitri-medium', uk: 'uk/uk_UA/ukrainian_tts/medium/uk_UA-ukrainian_tts-medium', hi: 'hi/hi_IN/pratham/medium/hi_IN-pratham-medium', ar: 'ar/ar_JO/kareem/medium/ar_JO-kareem-medium', tr: 'tr/tr_TR/dfki/medium/tr_TR-dfki-medium', nl: 'nl/nl_NL/mls/medium/nl_NL-mls-medium', pl: 'pl/pl_PL/darkman/medium/pl_PL-darkman-medium', zh: 'zh/zh_CN/huayan/medium/zh_CN-huayan-medium' };
 export const voicesDir = () => ensureDir(process.env.REELKIT_VOICES || path.join(os.homedir(), '.reelkit', 'voices'));
-const piperBin = () => (has('piper') ? ['piper'] : run(isWin ? 'python' : 'python3', ['-c', 'import piper']).ok ? [isWin ? 'python' : 'python3', '-m', 'piper'] : null);
+const piperBin = () => (has('piper') ? ['piper'] : pyCan('piper') ? [PYBIN(), '-m', 'piper'] : null);
 export const piperAvailable = () => !!piperBin();
 export async function installPiperVoice(lang = 'en', log = console.log) {
   const NAMED = { lessac: PIPER_VOICES.en, amy: 'en/en_US/amy/medium/en_US-amy-medium', ryan: 'en/en_US/ryan/medium/en_US-ryan-medium', joe: 'en/en_US/joe/medium/en_US-joe-medium' };
@@ -30,7 +30,7 @@ export const KOKORO_VOICES = { en: [['af_heart', 'Heart (warm, female)'], ['af_b
 const kokoroDir = () => ensureDir(path.join(voicesDir(), 'kokoro'));
 export const kokoroInstalled = () => Object.keys(KOKORO_FILES).every(f => fs.existsSync(path.join(kokoroDir(), f)));
 const PY = () => process.env.REELKIT_PYTHON || (isWin ? 'python' : 'python3');
-let _kokoroPy; export const kokoroAvailable = () => (_kokoroPy ??= run(PY(), ['-c', 'import kokoro_onnx, soundfile']).ok) && kokoroInstalled();
+export const kokoroAvailable = () => kokoroInstalled() && pyCan('kokoro_onnx, soundfile');
 export async function installKokoro(log = console.log) {
   for (const [f, url] of Object.entries(KOKORO_FILES)) { const dest = path.join(kokoroDir(), f); if (fs.existsSync(dest)) continue; log(`downloading ${f} (large, one time)...`); const r = await fetch(url); if (!r.ok) throw new Error('download failed ' + r.status); const tmp = dest + '.part'; const ws = fs.createWriteStream(tmp); const rd = r.body.getReader(); for (;;) { const { done, value } = await rd.read(); if (done) break; if (!ws.write(value)) await new Promise(x => ws.once('drain', x)); } await new Promise(x => ws.end(x)); fs.renameSync(tmp, dest); }
   return kokoroDir();

@@ -17,7 +17,12 @@ import { dailyTick } from './daily.mjs';
 
 const dir = () => ensureDir(path.join(home(), 'jobs'));
 const jf = id => path.join(dir(), id + '.json');
-export const listJobs = () => fs.readdirSync(dir()).filter(f => f.endsWith('.json')).map(f => readJson(path.join(dir(), f), null)).filter(Boolean).sort((a, b) => b.created.localeCompare(a.created));
+export function listJobs(limit = 200) { // newest first; only the newest `limit` files are parsed, so polling stays cheap as history grows
+  const d = dir(); const files = fs.readdirSync(d).filter(f => f.endsWith('.json')).map(f => { try { return { f, m: fs.statSync(path.join(d, f)).mtimeMs }; } catch { return null; } }).filter(Boolean).sort((a, b) => b.m - a.m);
+  for (const old of files.slice(400)) { try { fs.rmSync(path.join(d, old.f)); } catch {} }
+  return files.slice(0, limit).map(x => readJson(path.join(d, x.f), null)).filter(Boolean).sort((a, b) => b.created.localeCompare(a.created));
+}
+export const getJob = id => (/^[a-f0-9]{8}$/.test(String(id)) ? readJson(path.join(dir(), id + '.json'), null) : null);
 export function enqueue(type, payload) { const id = crypto.randomBytes(4).toString('hex'); const j = { id, type, payload, status: 'queued', progress: 0, stage: '', log: [], created: new Date().toISOString() }; writeJson(jf(id), j); return j; }
 const upd = (j, p) => { Object.assign(j, p); writeJson(jf(j.id), j); };
 

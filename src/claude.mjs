@@ -9,7 +9,8 @@ import path from 'node:path';
 import os from 'node:os';
 import crypto from 'node:crypto';
 import { spawn } from 'node:child_process';
-import { home, ensureDir, readJson, writeJson, has } from './util.mjs';
+import { home, ensureDir, readJson, writeJson } from './util.mjs';
+import { resolveClaude } from './claudebin.mjs';
 
 export const MODELS = ['haiku', 'sonnet', 'opus'];
 // mode -> model for each task. 'none' = never call a model (code does it).
@@ -78,7 +79,8 @@ export function buildArgs({ task, prompt, system, schema, model, effort, maxTurn
 
 function runCli(args, { cwd, bin, timeoutMs }) {
   return new Promise((resolve, reject) => {
-    const p = spawn(bin, args, { cwd, stdio: ['ignore', 'pipe', 'pipe'] }); let out = '', err = '';
+    const rc = resolveClaude(bin === 'claude' ? undefined : bin); // finds claude.exe / the npm package behind claude.cmd on Windows
+    const p = spawn(rc.cmd, [...rc.pre, ...args], { cwd, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true }); let out = '', err = '';
     const to = setTimeout(() => { p.kill(); reject(new Error('claude timed out')); }, timeoutMs);
     p.stdout.on('data', d => (out += d)); p.stderr.on('data', d => (err += d));
     p.on('error', e => { clearTimeout(to); reject(new Error(e.code === 'ENOENT' ? 'Claude Code CLI not found. Install: npm i -g @anthropic-ai/claude-code, then run `claude` once to sign in.' : e.message)); });
@@ -128,4 +130,4 @@ export async function askClaude({ task, prompt, system, schema, validate, cacheK
   throw lastErr || new Error('Claude call failed');
 }
 
-export const claudeAvailable = () => has(getSettings().claudeBin || 'claude');
+export const claudeAvailable = () => !!resolveClaude(getSettings().claudeBin).found;

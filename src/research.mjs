@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { home, readJson, writeJson } from './util.mjs';
 import { askClaude } from './claude.mjs';
-import { getBrand, saveBrand } from './brand.mjs';
+import { getBrand, saveBrand, ctaText } from './brand.mjs';
 import crypto from 'node:crypto';
 
 const file = () => path.join(home(), 'research.json');
@@ -29,7 +29,7 @@ Search forums, reviews, Reddit-style discussions, industry articles. Return: cus
   competitors: (b, r) => `Find the main competitors and adjacent solutions for: ${b.product} (niche: ${b.niche || b.audience}). ${(b.competitors || []).length ? 'Owner already follows: ' + b.competitors.join(', ') : ''}
 For each (5 max): positioning, public pricing if any, a weakness the owner could contrast with. Also list Instagram accounts that post short-form video in this niche ONLY if you found them in search results (handle + why; set verified=false unless you saw the profile), content angles that appear common, and 8 relevant hashtags.\n${RULES}`,
   strategy: (b, r) => `You are a short-form video strategist. Using ONLY this research and the owner's facts, produce a content strategy for Instagram Reels.
-Owner: ${b.product}. Audience: ${b.audience}. Problem: ${b.problem}. Tone: ${b.tone}. CTA keyword: ${b.cta}. Proof the owner gave: ${(b.proof || []).map(p => p.claim + (p.number ? '=' + p.number : '')).join('; ') || 'none'}.
+Owner: ${b.product}. Audience: ${b.audience}. Problem: ${b.problem}. Tone: ${b.tone}. Call to action: ${ctaText(b)}. Proof the owner gave: ${(b.proof || []).map(p => p.claim + (p.number ? '=' + p.number : '')).join('; ') || 'none'}.
 Research: ${JSON.stringify({ site: r.site, audience: r.audience, competitors: r.competitors }).slice(0, 9000)}
 Return: a one-sentence positioning, 4 content pillars (each with why and 3 example hooks of at most 8 words), 10 starter reel ideas (hook + payoff + pillar), a do_not_say list (overclaims, compliance risks, words the audience dislikes), proof the owner should collect to make stronger claims, 3 CTA ideas, a realistic cadence, and the visual mood that fits (one phrase). Never invent numbers; where proof is missing write the hook so it needs none.`,
 };

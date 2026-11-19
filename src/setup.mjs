@@ -4,19 +4,21 @@ import fs from 'node:fs';
 import path from 'node:path';
 import net from 'node:net';
 import { spawn } from 'node:child_process';
-import { run, has, isWin, isMac, findFont, home, readJson, writeJson } from './util.mjs';
+import { run, has, pyCan, probe, PYTHON, isWin, isMac, findFont, home, readJson, writeJson } from './util.mjs';
+import { resolveClaude } from './claudebin.mjs';
+import { refreshProbes } from './probes.mjs';
 import { findBrowser, loadPlaywright, rootDir } from './browser.mjs';
 import { whisperAvailable } from './transcribe.mjs';
 import { kokoroAvailable, piperAvailable, piperModelFor, installKokoro, installPiperVoice } from './voice.mjs';
 import { getSettings } from './claude.mjs';
 import { CDP_PORT } from './computer.mjs';
 
-const PY = () => process.env.REELKIT_PYTHON || (isWin ? 'python' : 'python3');
-const bin = () => getSettings().claudeBin || 'claude';
+const PY = PYTHON;
 
 export function claudeStatus() {
-  if (!has(bin())) return { installed: false, loggedIn: false };
-  const r = run(bin(), ['auth', 'status']); try { const j = JSON.parse(r.out); return { installed: true, loggedIn: !!j.loggedIn, method: j.authMethod }; } catch { return { installed: true, loggedIn: false, unknown: true }; }
+  if (probe.on) return probe.map.get('claude:status') || { installed: false, loggedIn: false, pending: true };
+  const rc = resolveClaude(getSettings().claudeBin); if (!rc.found) return { installed: false, loggedIn: false };
+  const r = run(rc.cmd, [...rc.pre, 'auth', 'status']); try { const j = JSON.parse(r.out); return { installed: true, loggedIn: !!j.loggedIn, method: j.authMethod }; } catch { return { installed: true, loggedIn: false, unknown: true }; }
 }
 
 const portOpen = port => new Promise(res => { const s = net.connect(port, '127.0.0.1'); s.on('connect', () => { s.destroy(); res(true); }); s.on('error', () => res(false)); setTimeout(() => { s.destroy(); res(false); }, 700); });
@@ -32,7 +34,9 @@ export async function igStatus(host = (process.env.REELKIT_IG_URL || 'https://ww
 
 /** Rows for the wizard. fix.kind: install (one click) | terminal | open (launch browser) | manual (text only) */
 export async function systemCheck() {
-  const cs = claudeStatus(); const ig = await igStatus(); const nodeOk = Number(process.versions.node.split('.')[0]) >= 18; const py = run(PY(), ['--version']);
+  if (probe.on) await refreshProbes({ maxAgeMs: 2500 }); // async + single-flight: never blocks other requests
+  const cs = claudeStatus(); const ig = await igStatus(); const nodeOk = Number(process.versions.node.split('.')[0]) >= 18;
+  const pyv = probe.on ? probe.map.get('py:version') || '' : (() => { const r = run(PY(), ['--version']); return r.ok ? (r.out || r.err).trim() : ''; })(); const py = { ok: !!pyv, out: pyv, err: '' };
   const mediaOk = has('ffmpeg') && has('ffprobe'); const browserOk = !!findBrowser() && !!loadPlaywright();
   const row = (id, label, ok, detail, fix, optional = false) => ({ id, label, ok, detail, fix, optional });
   return [
@@ -40,7 +44,7 @@ export async function systemCheck() {
     row('media', 'Video tools (ffmpeg)', mediaOk, mediaOk ? 'Ready' : 'Not found', mediaOk ? null : { kind: 'install', id: 'npm', label: 'Install' }),
     row('browser', 'Browser for rendering', browserOk, browserOk ? path.basename(findBrowser() || '') : (findBrowser() ? 'Renderer package missing' : 'Chrome or Edge not found'), browserOk ? null : findBrowser() ? { kind: 'install', id: 'npm', label: 'Install' } : { kind: 'manual', note: 'Install Google Chrome or Microsoft Edge.' }),
     row('python', 'Python', py.ok, py.ok ? py.out.trim() || py.err.trim() : 'Not found', py.ok ? null : { kind: 'manual', note: 'Install from python.org (tick "Add to PATH"), or: winget install Python.Python.3.12' }),
-    row('claude', 'Claude Code', cs.installed, cs.installed ? 'Installed' : 'Not installed', cs.installed ? null : { kind: 'install', id: 'claude', label: 'Install' }),
+    row('claude', 'Claude Code', cs.installed, cs.installed ? 'Installed' : cs.pending ? 'Checking…' : 'Not found', cs.installed ? null : { kind: 'install', id: 'claude', label: 'Install' }),
     row('claude-login', 'Signed in to Claude', cs.loggedIn, cs.loggedIn ? 'Signed in' : cs.installed ? 'Not signed in' : 'Install Claude Code first', cs.loggedIn || !cs.installed ? null : { kind: 'terminal', label: 'Sign in' }),
     row('whisper', 'Speech recognition (captions, footage cutter)', whisperAvailable(), whisperAvailable() ? 'Ready' : 'Not installed', whisperAvailable() ? null : { kind: 'install', id: 'whisper', label: 'Install' }),
     row('voice', 'Free voice (Kokoro)', kokoroAvailable(), kokoroAvailable() ? 'Ready' : 'Not installed (about 350 MB)', kokoroAvailable() ? null : { kind: 'install', id: 'kokoro', label: 'Install' }),
@@ -80,10 +84,10 @@ export async function runInstaller(id, log = () => {}) {
 
 /** Open a terminal running `claude` so the user can sign in (fixed command). */
 export function openClaudeLogin() {
-  const b = bin();
-  if (isWin) spawn('cmd.exe', ['/c', 'start', 'Claude sign-in', 'cmd', '/k', b], { detached: true, stdio: 'ignore' }).unref();
-  else if (isMac) spawn('osascript', ['-e', `tell application "Terminal" to do script "${b}"`, '-e', 'tell application "Terminal" to activate'], { detached: true, stdio: 'ignore' }).unref();
-  else for (const t of [['x-terminal-emulator', ['-e', b]], ['gnome-terminal', ['--', b]], ['konsole', ['-e', b]]]) if (has(t[0])) { spawn(t[0], t[1], { detached: true, stdio: 'ignore' }).unref(); return true; }
+  const rc = resolveClaude(getSettings().claudeBin); const cmd = rc.found ? [rc.cmd, ...rc.pre] : ['claude']; const line = cmd.map(x => (/\s/.test(x) ? `"${x}"` : x)).join(' ') + ' auth login';
+  if (isWin) spawn('cmd.exe', ['/c', 'start', 'Claude sign-in', 'cmd', '/k', line], { detached: true, stdio: 'ignore', windowsVerbatimArguments: false }).unref();
+  else if (isMac) spawn('osascript', ['-e', `tell application "Terminal" to do script "${line.replace(/"/g, '\\"')}"`, '-e', 'tell application "Terminal" to activate'], { detached: true, stdio: 'ignore' }).unref();
+  else for (const t of [['x-terminal-emulator', ['-e', line]], ['gnome-terminal', ['--', 'sh', '-c', line]], ['konsole', ['-e', line]]]) if (has(t[0])) { spawn(t[0], t[1], { detached: true, stdio: 'ignore' }).unref(); return true; }
   return true;
 }
 

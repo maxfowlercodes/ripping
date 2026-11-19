@@ -21,7 +21,7 @@ export function parseScript(text) {
 const words = s => s.split(/\s+/).filter(Boolean);
 const POWER = /\b(you|your|stop|never|secret|mistake|free|how|why|\$\d|\d+x|\d+k|nobody|everyone|worst|best|truth|before|without)\b/i;
 const FILLER = /\b(um|uh|like|basically|actually|literally|just|really|very)\b/gi;
-const CTA = /\b(comment|dm|follow|link in bio|save|share|send|reply|type)\b/i;
+const CTA = /\b(comment|dm|follow|link in bio|link below|save|share|send|reply|type|tap|click|visit|try it|grab)\b/i;
 
 /** Lint a script. Returns {checks:[{id,pass,msg,weight}], score, speakSeconds}. */
 export function lint(script) {

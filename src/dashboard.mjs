@@ -6,7 +6,8 @@ import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { listReels, getMeta, saveMeta, createReel, reelDir, scriptPath } from './store.mjs';
 import { parseScript, lint, virality } from './script.mjs';
-import { listJobs, enqueue, startWorker } from './jobs.mjs';
+import { listJobs, getJob, enqueue, startWorker } from './jobs.mjs';
+import { enableProbeMode, refreshProbes } from './probes.mjs';
 import { summary, calibrate } from './analytics.mjs';
 import { listSwipe, addItem, decide, discover, fmtViews } from './swipe.mjs';
 import { listAccounts, applySecrets, setKey, loadSecrets } from './accounts.mjs';
@@ -43,7 +44,7 @@ function scriptView(slug) {
 }
 
 export function startDashboard({ port = 4177, lan = false, worker = true, open = false } = {}) {
-  applySecrets();
+  applySecrets(); enableProbeMode(); refreshProbes(); const probeTimer = setInterval(() => refreshProbes(), 20000); probeTimer.unref();
   const token = lan ? crypto.randomBytes(8).toString('hex') : null;
   // heavy work (renders, Whisper, Claude calls, posting) runs in a child process so the UI never freezes
   let child = null; const bin = fileURLToPath(new URL('../bin/reelkit.mjs', import.meta.url));
@@ -66,7 +67,7 @@ export function startDashboard({ port = 4177, lan = false, worker = true, open =
 
       if (p === '/api/state') {
         if (!stylesCache) { try { const cat = loadCatalog(); stylesCache = Object.keys(cat).length ? Object.values(cat).map(c => ({ name: c.name, desc: c.desc, tags: c.tags, presenter: c.presenter })) : await styleList(); } catch { stylesCache = []; } }
-        return send(res, 200, { onboarding: getOnboarding(), mode: getSettings().mode, calls: usageToday().calls, reels: listReels(), styles: stylesCache, accounts: listAccounts(), jobs: listJobs().slice(0, 12), provider: detectProvider('auto'),
+        return send(res, 200, { onboarding: getOnboarding(), mode: getSettings().mode, calls: usageToday().calls, reels: listReels(), styles: stylesCache, accounts: listAccounts(), jobs: listJobs(12), provider: detectProvider('auto'),
           health: { ffmpeg: has('ffmpeg'), browser: browserAvailable() && !!findBrowser(), font: !!findFont(), instagram: listAccounts().length > 0, elevenlabs: !!process.env.ELEVENLABS_API_KEY, heygen: !!process.env.HEYGEN_API_KEY } });
       }
       if (p === '/api/reel' && req.method === 'POST') { const s = createReel(body.title || 'Untitled', body.text || `# ${body.title || 'Untitled'}\nYour hook here.\n`); return send(res, 200, { slug: s }); }
@@ -104,6 +105,7 @@ export function startDashboard({ port = 4177, lan = false, worker = true, open =
       }
       if (p === '/api/guide/confirm' && req.method === 'POST') { const f = path.join(home(), 'state.json'); const d = readJson(f, {}); if (['igLoginConfirmed', 'voiceChecked'].includes(body.id)) d[body.id] = true; writeJson(f, d); return send(res, 200, { ok: true }); }
 
+      if ((m = p.match(/^\/api\/job\/([a-f0-9]{8})$/))) { const j = getJob(m[1]); return send(res, j ? 200 : 404, j || { error: 'no such job' }); }
       if (p === '/api/setup/check') return send(res, 200, { rows: await systemCheck() });
       if (p === '/api/setup/install' && req.method === 'POST') { if (typeof body.id !== 'string' || !Object.hasOwn(INSTALLERS, body.id)) return send(res, 400, { error: 'unknown installer' }); return send(res, 200, enqueue('install', { id: body.id })); }
       if (p === '/api/setup/claude-login' && req.method === 'POST') { openClaudeLogin(); return send(res, 200, { ok: true }); }
