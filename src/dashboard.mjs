@@ -66,6 +66,7 @@ export function startDashboard({ port = 4177, lan = false, worker = true, open =
       const p = u.pathname; const body = req.method === 'POST' && p !== '/api/footage/upload' ? await readBody(req) : {};
 
       if (p === '/healthz') return send(res, 200, { ok: true, app: 'reelkit' });
+      if (p === '/api/shutdown' && req.method === 'POST') { send(res, 200, { ok: true }); setTimeout(() => { stop(); process.exit(0); }, 150); return; }
       if (p === '/api/state') {
         if (!stylesCache) { try { const cat = loadCatalog(); stylesCache = Object.keys(cat).length ? Object.values(cat).map(c => ({ name: c.name, desc: c.desc, tags: c.tags, presenter: c.presenter })) : await styleList(); } catch { stylesCache = []; } }
         return send(res, 200, { onboarding: getOnboarding(), mode: getSettings().mode, calls: usageToday().calls, reels: listReels(), styles: stylesCache, accounts: listAccounts(), jobs: listJobs(12), provider: detectProvider('auto'),
@@ -205,7 +206,8 @@ export function openAppWindow(url) {
   const p = spawn(exe, [`--app=${url}`, `--user-data-dir=${ensureDir(path.join(home(), 'app-profile'))}`, '--window-size=1240,900', '--no-first-run', '--no-default-browser-check'], { detached: true, stdio: 'ignore' }); p.unref();
 }
 
-/** Is a Reelkit dashboard already answering on this port? */
+/** Is a Reelkit dashboard already answering on this port? (also recognises older versions that have no /healthz) */
 export function reelkitRunning(port) {
-  return new Promise(res => { const q = http.get({ host: '127.0.0.1', port, path: '/healthz', timeout: 1500 }, r => { let b = ''; r.on('data', d => (b += d)); r.on('end', () => { try { res(JSON.parse(b).app === 'reelkit'); } catch { res(false); } }); }); q.on('error', () => res(false)); q.on('timeout', () => { q.destroy(); res(false); }); });
+  const get = path => new Promise(res => { const q = http.get({ host: '127.0.0.1', port, path, timeout: 1500 }, r => { let b = ''; r.on('data', d => (b += d)); r.on('end', () => res({ code: r.statusCode, body: b })); }); q.on('error', () => res(null)); q.on('timeout', () => { q.destroy(); res(null); }); });
+  return (async () => { const h = await get('/healthz'); try { if (h && JSON.parse(h.body).app === 'reelkit') return true; } catch {} const r = await get('/'); return !!(r && r.code === 200 && /<title>Reelkit<\/title>/.test(r.body)); })();
 }

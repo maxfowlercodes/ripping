@@ -62,3 +62,19 @@ test('a port taken by another program gives a clear message, not silence', async
   const blocker = http.createServer((q, r) => r.end('x')).listen(4314); await new Promise(r => setTimeout(r, 200));
   try { const r = await cli(['dashboard', '--port', '4314', '--no-worker']); assert.notEqual(r.status, 0); assert.match(r.stderr, /already in use by another program/); } finally { blocker.close(); }
 });
+
+import { reelkitRunning } from '../src/dashboard.mjs';
+test('an older Reelkit without /healthz is still recognised as Reelkit (so it can be reused or replaced)', async () => {
+  const old = http.createServer((q, r) => { if (q.url === '/healthz') { r.writeHead(404); return r.end('nope'); } r.writeHead(200, { 'content-type': 'text/html' }); r.end('<html><head><title>Reelkit</title></head></html>'); }).listen(4315);
+  const other = http.createServer((q, r) => { r.writeHead(200); r.end('<title>Something else</title>'); }).listen(4316); await new Promise(r => setTimeout(r, 200));
+  try { assert.equal(await reelkitRunning(4315), true); assert.equal(await reelkitRunning(4316), false); assert.equal(await reelkitRunning(4399), false); } finally { old.close(); other.close(); }
+});
+test('reelkit stop shuts the app and its worker down, and no worker is left behind', async () => {
+  const app = spawn(process.execPath, [path.join(import.meta.dirname, '..', 'bin', 'reelkit.mjs'), 'dashboard', '--port', '4317'], { env: { ...process.env, REELKIT_NO_WINDOW: '1' } }); let exited = false; app.on('close', () => (exited = true));
+  for (let i = 0; i < 30 && !(await reelkitRunning(4317)); i++) await new Promise(r => setTimeout(r, 200));
+  assert.equal(await reelkitRunning(4317), true);
+  const s = await cli(['stop', '--port', '4317']); assert.match(s.stdout, /stopped/i);
+  for (let i = 0; i < 30 && !exited; i++) await new Promise(r => setTimeout(r, 200)); assert.equal(exited, true, 'dashboard process ended');
+  assert.equal(await reelkitRunning(4317), false); assert.match((await cli(['stop', '--port', '4317'])).stdout, /not running/);
+  await new Promise(r => setTimeout(r, 800)); const left = spawnSync('pgrep', ['-f', 'reelkit.mjs worker --child'], { encoding: 'utf8' }); assert.equal(left.stdout.trim(), '', 'no orphan worker');
+});

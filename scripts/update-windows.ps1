@@ -2,6 +2,8 @@
 #   powershell -ExecutionPolicy Bypass -File scripts\update-windows.ps1
 $ErrorActionPreference = 'Stop'
 $root = (Resolve-Path "$PSScriptRoot\..").Path
+# stop the running app first so files are not in use
+if (Test-Path (Join-Path $root 'scripts\stop-windows.ps1')) { & (Join-Path $root 'scripts\stop-windows.ps1') | Out-Null }
 $tmp = Join-Path $env:TEMP ("reelkit-update-" + [guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory $tmp | Out-Null
 Write-Host "Downloading the latest version..."

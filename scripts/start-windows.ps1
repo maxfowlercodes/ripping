@@ -12,6 +12,10 @@ if (-not (Test-Path (Join-Path $root 'bin\reelkit.mjs'))) { Fail "Reelkit files 
 Set-Location $root
 $url = 'http://127.0.0.1:4177/healthz'
 function Up { try { (Invoke-WebRequest -UseBasicParsing -TimeoutSec 2 $url).Content -match 'reelkit' } catch { $false } }
+function PortBusy { [bool](Get-NetTCPConnection -LocalPort 4177 -State Listen -ErrorAction SilentlyContinue) }
+function AnyReelkit { try { (Invoke-WebRequest -UseBasicParsing -TimeoutSec 2 'http://127.0.0.1:4177/').Content -match '<title>Reelkit</title>' } catch { $false } }
+# An older Reelkit (no health check) or a half-dead one may hold the port: stop it, then start fresh.
+if (-not (Up) -and (PortBusy)) { if (AnyReelkit) { "$(Get-Date -Format s) stale Reelkit on the port, stopping it" | Out-File $log -Append; & (Join-Path $PSScriptRoot 'stop-windows.ps1') | Out-Null } else { Fail 'Another program is using port 4177. Close it and try again.' } }
 if (Up) { "$(Get-Date -Format s) already running, opening window" | Out-File $log -Append; & $node.Source bin\reelkit.mjs open | Out-Null; exit 0 }
 "$(Get-Date -Format s) starting" | Out-File $log -Append
 $out = Join-Path $logDir 'server.out.log'; $err = Join-Path $logDir 'server.err.log'

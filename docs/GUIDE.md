@@ -55,6 +55,7 @@ Close Reelkit, then in PowerShell from the Reelkit folder: `powershell -Executio
 ## 7. Troubleshooting
 | Symptom | Fix |
 |---|---|
+| "Port 4177 is already in use" or an old copy is stuck | `powershell -ExecutionPolicy Bypass -File scripts\stop-windows.ps1` stops every Reelkit process, then click the shortcut. The launcher now does this itself when it finds an old copy |
 | I clicked Reelkit and nothing happened | It now shows a message box if it cannot start. Logs are in `%USERPROFILE%\.reelkit\` (launcher.log, server.err.log). To see errors live, run `npm start` in the Reelkit folder. If the page opens at http://localhost:4177 Reelkit is running and only the window failed; run `node bin\reelkit.mjs open` |
 | Something is missing | `node bin\reelkit.mjs doctor` lists it with the fix |
 | "Claude Code CLI not found" | install it and run `claude` once to sign in. Reelkit finds the npm `.cmd` shim on Windows by itself; if it still says not found, run `where claude` and tell me what it prints |
