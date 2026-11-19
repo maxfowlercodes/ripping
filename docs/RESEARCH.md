@@ -22,7 +22,8 @@ for promoting software, driven by the **user's own Claude Code** (Max plan recom
 - Local **worker** process; each reel runs as a **Claude Code session** inside a sandbox (writes only its folder; network limited to vendor host, fonts, npm). Windows via WSL/Ubuntu + bubblewrap/socat. Setup installs Node, ffmpeg, Claude Code CLI.
 - Web dashboard on Supabase/Vercel; setup progress and settings sync from there. Signed auto-updates between reels. Resume-from-saved-work for stalled reels.
 - Styles = JS/React-ish motion templates ("kits"), some GPU-rendered; custom style = Claude generates a template from a reference reel.
-- Pricing: $99/mo (250 videos, 10 IG accounts), $2,500/mo done-for-you. No money-back guarantee. You also pay for Claude.
+- Pricing (re-verified on the #pricing section): **Growth** $99/mo (was $199), 7-day free trial, cancel anytime. Includes unlimited research and scripting, the video engine, up to 250 videos/mo, unlimited revisions, custom motion/screens/voices, 30 style kits, create-your-own style, analytics panel, HeyGen avatars, 10 sub-accounts, 10 Instagram accounts. Requires Claude Code (Max recommended), billed separately by Anthropic. **Done-For-You** $2,500/mo, 30-120 videos, weekly strategy sync, currently full (waitlist). No money-back guarantee.
+- Not found: any Lifetime Offer on the homepage (the refunds page mentions one, with no price). The FAQ answers ("Can't I just use ChatGPT or Claude for this?", "My product isn't ready yet", "I don't have time") are in expanders a text fetch cannot open, so they are unknown.
 
 ## What Reelkit deliberately does differently
 - Free, MIT, no account, no cloud, native Windows (no WSL), zero npm dependencies.
