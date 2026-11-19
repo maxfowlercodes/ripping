@@ -28,6 +28,7 @@ export const TASKS = {
   style_make:        { desc: 'Generate a custom video style',                           eco: 'sonnet', balanced: 'sonnet', quality: 'opus',   effort: 'medium', ttlDays: 90 },
   chat_reply:        { desc: 'Answer a website/Instagram visitor in the business chat', eco: 'haiku', balanced: 'haiku', quality: 'sonnet', effort: 'low', ttlDays: 0 },
   brand_autofill:    { desc: 'Onboarding: fill in your brand details from your website', eco: 'haiku', balanced: 'sonnet', quality: 'sonnet', effort: 'low', ttlDays: 30, web: true },
+  profile_plan:      { desc: 'Suggest your Instagram bio, name, profile picture brief, highlights and pinned posts', eco: 'sonnet', balanced: 'sonnet', quality: 'opus', effort: 'medium', ttlDays: 14 },
   research_site:     { desc: 'First-run: read your website and extract what you really offer', eco: 'sonnet', balanced: 'sonnet', quality: 'opus', effort: 'medium', ttlDays: 30, web: true },
   research_audience: { desc: 'First-run: who buys, their pains and exact words (web search)', eco: 'sonnet', balanced: 'sonnet', quality: 'opus', effort: 'medium', ttlDays: 30, web: true },
   research_competitors: { desc: 'First-run: competitors, adjacent accounts, angles (web search)', eco: 'sonnet', balanced: 'sonnet', quality: 'opus', effort: 'medium', ttlDays: 30, web: true },

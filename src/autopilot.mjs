@@ -29,6 +29,7 @@ const save = r => { r.updated = Date.now(); writeJson(rf(r.id), r); };
 export function startRun(opts = {}) {
   const b = getBrand(); const id = crypto.randomBytes(4).toString('hex');
   const r = { id, status: 'queued', created: new Date().toISOString(), opts: { post: b.posting.mode, ...opts }, steps: STEPS.map(([sid, name]) => ({ id: sid, name, status: 'pending' })), ctx: {}, log: [] };
+  if (opts.preset) { r.ctx = { slug: opts.preset.slug, caption: opts.preset.caption, idea: { hook: opts.preset.title } }; const cut = STEPS.findIndex(x => x[0] === 'post'); r.steps.forEach((st, i) => { if (i < cut) { st.status = 'done'; st.detail = st.id === 'render' ? 'existing video' : ''; } }); delete r.opts.preset; }
   save(r); return r;
 }
 

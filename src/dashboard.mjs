@@ -1,3 +1,5 @@
+import { postLibrary, startPostRun } from './library.mjs';
+import { getProfilePlan } from './profile.mjs';
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -26,7 +28,7 @@ import { addFromText } from './swipe.mjs';
 import { ensureBrowser } from './computer.mjs';
 import { getLeads, leadsCsv, statusFile } from './chat.mjs';
 import { loadCatalog } from './stylecatalog.mjs';
-import { systemCheck, INSTALLERS, openClaudeLogin, igStatus, getOnboarding, setOnboarding, getAutofill, getBrowserTest } from './setup.mjs';
+import { systemCheck, INSTALLERS, openClaudeLogin, igStatus, browserShot, getOnboarding, setOnboarding, getAutofill, getBrowserTest } from './setup.mjs';
 import { getResearch } from './research.mjs';
 import { storageReport, cleanStorage, freeBytes } from './storage.mjs';
 import { voiceCatalog, synth } from './voice.mjs';
@@ -116,6 +118,13 @@ export function startDashboard({ port = 4177, lan = false, worker = true, open =
       if (p === '/api/setup/check') return send(res, 200, { rows: await systemCheck() });
       if (p === '/api/setup/install' && req.method === 'POST') { if (typeof body.id !== 'string' || !Object.hasOwn(INSTALLERS, body.id)) return send(res, 400, { error: 'unknown installer' }); return send(res, 200, enqueue('install', { id: body.id })); }
       if (p === '/api/setup/claude-login' && req.method === 'POST') { openClaudeLogin(); return send(res, 200, { ok: true }); }
+      if (p === '/api/library') return send(res, 200, { items: postLibrary(), igStatus: await igStatus() });
+      if (p === '/api/library/post' && req.method === 'POST') { try { return send(res, 200, startPostRun(String(body.slug || ''), body.mode === 'auto' ? 'auto' : 'review')); } catch (e) { return send(res, 400, { error: e.message }); } }
+      if (p === '/api/library/mark-posted' && req.method === 'POST') { const mt = getMeta(body.slug); if (!mt) return send(res, 404, {}); Object.assign(mt, { status: 'posted', postedAt: new Date().toISOString(), postedVia: 'manual', permalink: String(body.permalink || '').slice(0, 300) }); saveMeta(body.slug, mt); return send(res, 200, { ok: true }); }
+      if (p === '/api/library/reset' && req.method === 'POST') { const mt = getMeta(body.slug); if (!mt) return send(res, 404, {}); if (mt.status !== 'posted') { delete mt.scheduledAt; mt.status = 'draft'; saveMeta(body.slug, mt); } return send(res, 200, { ok: true }); }
+      if (p === '/api/browser/shot') { try { const sh = await browserShot(); res.writeHead(200, { 'content-type': 'image/jpeg', 'cache-control': 'no-store' }); return res.end(sh.jpeg); } catch (e) { return send(res, 503, { error: e.message }); } }
+      if (p === '/api/profile' && req.method === 'POST') return send(res, 200, enqueue('profile', { currentBio: String(body.currentBio || '').slice(0, 400), currentName: String(body.currentName || '').slice(0, 80), oldContent: String(body.oldContent || '').slice(0, 600) }));
+      if (p === '/api/profile') return send(res, 200, { plan: getProfilePlan(), username: getBrand().posting.username || '' });
       if (p === '/api/browser/test' && req.method === 'POST') return send(res, 200, enqueue('browser-test', {}));
       if (p === '/api/browser/test') return send(res, 200, { result: getBrowserTest() });
       if (p === '/api/refs/find' && req.method === 'POST') {

@@ -34,6 +34,19 @@ export async function browserCookies(port = CDP_PORT) {
     ws.onerror = () => { clearTimeout(t); reject(new Error('devtools connection failed')); };
   });
 }
+/** PNG of the Instagram tab in the Reelkit browser (what Claude has filled in), via a plain DevTools socket: attaches like a screenshot tool, changes nothing on the page. */
+export async function browserShot(port = CDP_PORT) {
+  if (typeof WebSocket === 'undefined') throw new Error('Needs Node 22+');
+  if (!(await portOpen(port))) throw new Error('The Reelkit browser is not open');
+  const list = await (await fetch(`http://127.0.0.1:${port}/json/list`, { signal: AbortSignal.timeout(2500) })).json();
+  const pages = list.filter(t => t.type === 'page' && t.webSocketDebuggerUrl); const t = pages.find(x => /instagram\.com/.test(x.url)) || pages[0]; if (!t) throw new Error('No browser tab is open');
+  return new Promise((resolve, reject) => {
+    const ws = new WebSocket(t.webSocketDebuggerUrl); const to = setTimeout(() => { try { ws.close(); } catch {} reject(new Error('screenshot timeout')); }, 8000);
+    ws.onopen = () => ws.send(JSON.stringify({ id: 1, method: 'Page.captureScreenshot', params: { format: 'jpeg', quality: 72 } }));
+    ws.onmessage = e => { const m = JSON.parse(e.data); if (m.id === 1) { clearTimeout(to); ws.close(); m.error ? reject(new Error(m.error.message)) : resolve({ jpeg: Buffer.from(m.result.data, 'base64'), url: t.url }); } };
+    ws.onerror = () => { clearTimeout(to); reject(new Error('devtools connection failed')); };
+  });
+}
 /** Is the dedicated Reelkit browser running, and is it logged in to Instagram? (session cookie only; no page content is read) */
 export async function igStatus(host = (process.env.REELKIT_IG_URL || 'https://www.instagram.com')) {
   if (!(await portOpen(CDP_PORT))) return { browser: false, loggedIn: false };

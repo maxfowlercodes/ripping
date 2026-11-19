@@ -6,7 +6,7 @@ const toast = m => { const t = $('#toast'); t.textContent = m; t.classList.add('
 const mmss = s => `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, '0')}`;
 const fmt = n => (n == null ? '–' : n >= 1e6 ? (n / 1e6).toFixed(1) + 'M' : n >= 1e4 ? Math.round(n / 1e3) + 'K' : n.toLocaleString());
 const S = { state: null, slug: localStorage.getItem('rk.slug') || '', style: localStorage.getItem('rk.style') || 'aurora-dark', timers: [] };
-const stop = () => { S.timers.forEach(clearInterval); S.timers = []; clearTimeout(S.tt); clearTimeout(S.rt); };
+const stop = () => { S.timers.forEach(clearInterval); S.timers = []; clearTimeout(S.tt); clearTimeout(S.rt); clearTimeout(S.lt); clearTimeout(S.pt); };
 const reels = () => S.state?.reels || [];
 const cur = () => reels().find(r => r.slug === S.slug) || reels()[0];
 async function refresh() { S.state = await api('/state'); if (!S.slug && reels()[0]) S.slug = reels()[0].slug; }
@@ -20,7 +20,7 @@ async function route() {
   try { await refresh(); } catch (e) { $('#main').innerHTML = `<div class="card bad">${esc(e.message)}</div>`; return; }
   if (!S.state.onboarding.done && h !== 'welcome' && !sessionStorage.getItem('rk.skipOnb')) { location.hash = '#welcome'; return; }
   document.body.classList.toggle('onb', h === 'welcome'); buildNav(h, S.state);
-  try { await ({ welcome: onboarding, today, swipe, script, produce, post, analyze, repurpose, footage, leads, research, claude, setup, guide }[h] || today)(); window.scrollTo(0, 0); }
+  try { await ({ welcome: onboarding, today, swipe, script, produce, library, profile, post, analyze, repurpose, footage, leads, research, claude, setup, guide }[h] || today)(); window.scrollTo(0, 0); }
   catch (e) { $('#main').innerHTML = `<div class="card"><b>Something went wrong</b><p class="mut">${esc(e.message)}</p></div>`; }
 }
 addEventListener('hashchange', route);
@@ -118,6 +118,75 @@ async function post() {
   $('#sch').onclick = async () => { if (!$('#at').value) return toast('Pick a time'); await api('/schedule', { ...body(), at: $('#at').value }); toast('Scheduled'); post(); };
   $('#now').onclick = async () => { if (await ask({ title: 'Publish now?', message: 'This reel will go public on Instagram right away.', confirm: 'Publish' })) { await api('/post-now', body()); toast('Posting…'); } };
   const u = $('#uns'); if (u) u.onclick = async () => { await api('/unschedule', { slug: sel.slug }); post(); };
+}
+
+
+// ---------------------------------------------------------------- Posts library
+const LIB_TABS = [['review', 'Needs your OK'], ['attention', 'Stopped halfway'], ['draft', 'Drafts'], ['scheduled', 'Scheduled'], ['posted', 'Posted']];
+const when = iso => (iso ? new Date(typeof iso === 'number' ? iso : iso).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '');
+async function library(poll) {
+  clearTimeout(S.lt); if (poll && (location.hash || '') !== '#library') return;
+  const d = await api('/library'); const items = d.items; const counts = k => items.filter(i => i.state === k).length;
+  if (!S.libTab || (!poll && !counts(S.libTab) && S.libTab !== 'draft')) S.libTab = ['review', 'attention', 'draft', 'scheduled', 'posted'].find(k => counts(k)) || 'draft';
+  const sig = JSON.stringify([S.libTab, items.map(i => [i.slug, i.state, i.runId, i.live, i.at])]); if (poll && sig === S.libSig) { document.querySelectorAll('[data-shot]').forEach(im => { im.src = '/api/browser/shot?t=' + Date.now(); }); S.lt = setTimeout(() => library(true), 4000); return; } S.libSig = sig;
+  const rows = items.filter(i => i.state === S.libTab); const reviewing = S.libTab === 'review' && rows.length;
+  const hint = { review: 'Claude has filled in the post inside the Reelkit browser and stopped. Check it, then press Share. Nothing goes public until you do.', attention: 'These started to post but did not finish. Open Instagram and check before retrying, so nothing is posted twice.', draft: 'Finished videos that were never sent to Instagram.', scheduled: 'Go out at the time shown while Reelkit is running.', posted: 'Confirmed shared.' }[S.libTab];
+  const card = i => `<div class="card" data-slug="${esc(i.slug)}"><div class="row" style="align-items:flex-start;gap:14px">${i.hasVideo ? `<video src="/file/${esc(i.slug)}/reel.mp4#t=0.5" preload="metadata" playsinline controls style="width:${i.state === 'review' ? 200 : 110}px;border-radius:12px;background:#000"></video>` : '<div class="mut" style="width:110px">No video</div>'}
+    <div class="grow"><div class="row"><b class="grow">${esc(i.title)}</b><span class="chip ${i.state === 'posted' ? 'cta' : ''}">${({ review: 'Waiting for you', attention: 'Stopped', draft: 'Draft', scheduled: 'Scheduled', posted: 'Posted' })[i.state]}</span></div>
+    <p class="mut" style="font-size:13px;margin:4px 0;white-space:pre-wrap">${esc((i.caption || '').slice(0, i.state === 'review' ? 600 : 140))}</p>
+    ${i.detail ? `<p class="${i.state === 'attention' ? 'bad' : 'mut'}" style="font-size:13px;margin:4px 0">${esc(i.detail)}</p>` : ''}
+    <p class="mut" style="font-size:12px;margin:2px 0 8px">${i.state === 'posted' ? 'Posted ' : i.state === 'scheduled' ? 'Goes out ' : i.state === 'draft' ? 'Rendered ' : 'Updated '}${esc(when(i.at))}${i.via ? ' · via ' + esc(i.via) : ''}${i.trial ? ' · trial' : ''}${i.permalink ? ` · <a href="${esc(i.permalink)}" target="_blank" rel="noopener noreferrer">open</a>` : ''}</p>
+    ${i.state === 'review' ? `<p class="mut" style="font-size:13px;margin:0 0 6px"><b>What Instagram shows right now</b> <button class="plain sm" data-shotr>Refresh</button></p><img data-shot alt="Live view of the Instagram window" style="width:100%;max-width:560px;border-radius:12px;border:1px solid var(--sep);background:var(--card)"><p class="row" style="margin-top:12px"><button data-do="share">Share it</button><button class="alt" data-do="manual">I shared it myself</button><button class="plain" data-do="cancel">Cancel</button></p>` : ''}
+    ${i.state === 'draft' && !i.live ? `<p class="row"><button class="tint sm" data-do="post">Review &amp; post</button><a class="alt sm" href="#produce" data-open="${esc(i.slug)}">Open in Produce</a></p>` : ''}
+    ${i.state === 'attention' && !i.live ? `<p class="row"><button class="tint sm" data-do="post">Retry (asks you first)</button><button class="alt sm" data-do="manual-posted">It did post</button><button class="plain sm" data-do="reset">Move to drafts</button></p>` : ''}
+    ${i.state === 'attention' && i.live ? `<p class="row"><button class="alt sm" data-do="cancelrun">Cancel this attempt</button></p>` : ''}
+    ${i.state === 'scheduled' ? `<p class="row"><button class="alt sm" data-do="reset">Unschedule</button></p>` : ''}</div></div></div>`;
+  $('#main').innerHTML = `<h2>Posts</h2><p class="sub">Everything you have made, and exactly where each one stands. Nothing is hidden: if a post broke halfway, it shows up under Stopped halfway.</p>
+  ${!d.igStatus.browser || d.igStatus.loggedIn === false ? `<div class="card"><div class="li"><span class="tile t-orange">${ic('bell', 17)}</span><div class="grow"><b>${!d.igStatus.browser ? 'The Reelkit browser is closed' : 'Not logged in to Instagram'}</b><span class="mut">Posting needs it open and logged in. Settings has the one-click fix.</span></div><a class="alt sm" href="#setup">Settings</a></div></div>` : ''}
+  <div class="seg" id="libtabs" style="margin-bottom:14px">${LIB_TABS.map(([k, l]) => `<button data-v="${k}" class="${k === S.libTab ? 'on' : ''}">${l}${counts(k) ? ` <span class="mut">${counts(k)}</span>` : ''}</button>`).join('')}</div>
+  <p class="mut" style="font-size:13px">${hint}</p>${rows.map(card).join('') || '<div class="card"><p class="mut" style="margin:0">Nothing here.</p></div>'}`;
+  document.querySelectorAll('#libtabs button').forEach(b => (b.onclick = () => { S.libTab = b.dataset.v; library(); }));
+  document.querySelectorAll('[data-open]').forEach(a => (a.onclick = () => { S.slug = a.dataset.open; try { localStorage.setItem('rk.slug', S.slug); } catch {} }));
+  const shot = () => document.querySelectorAll('[data-shot]').forEach(im => { im.onerror = () => { im.alt = 'Could not capture the browser window. Look at it directly on screen.'; }; im.src = '/api/browser/shot?t=' + Date.now(); }); shot();
+  document.querySelectorAll('[data-shotr]').forEach(b => (b.onclick = shot));
+  document.querySelectorAll('[data-do]').forEach(b => (b.onclick = async () => {
+    const i = items.find(x => x.slug === b.closest('[data-slug]').dataset.slug); const a = b.dataset.do;
+    try {
+      if (a === 'post') { if (!(await ask({ title: 'Post this reel?', message: 'Claude will fill in the post in the Reelkit browser and stop. You see it here and press Share yourself.', confirm: 'Start' }))) return; await api('/library/post', { slug: i.slug, mode: 'review' }); toast('Preparing the post...'); S.libTab = 'review'; }
+      else if (a === 'share') { if (!(await ask({ title: 'Share on Instagram now?', message: 'This reel goes public immediately.', confirm: 'Share' }))) return; await api('/inbox/answer', { id: i.inboxId, answer: { action: 'share' } }); toast('Sharing...'); }
+      else if (a === 'manual') { await api('/inbox/answer', { id: i.inboxId, answer: { action: 'manual-done' } }); toast('Marked as posted'); }
+      else if (a === 'cancel') { await api('/inbox/answer', { id: i.inboxId, answer: { action: 'cancel' } }); toast('Cancelled, nothing was shared'); }
+      else if (a === 'cancelrun') { await api('/run/cancel', { id: i.runId }); toast('Cancelled'); }
+      else if (a === 'manual-posted') { await api('/library/mark-posted', { slug: i.slug }); toast('Moved to Posted'); }
+      else if (a === 'reset') { await api('/library/reset', { slug: i.slug }); toast('Moved to Drafts'); }
+    } catch (e) { toast(e.message || 'Something went wrong'); }
+    library();
+  }));
+  if (items.some(i => i.state === 'review' || i.live)) S.lt = setTimeout(() => library(true), 4000);
+}
+
+// ---------------------------------------------------------------- Profile & bio
+async function profile(poll) {
+  clearTimeout(S.pt); if (poll && (location.hash || '') !== '#profile') return;
+  const d = await api('/profile'); await refresh(); const job = S.state.jobs.find(j => j.type === 'profile'); const running = job && ['queued', 'running'].includes(job.status); const p = d.plan;
+  const copy = (t, k) => `<button class="plain sm" data-copy="${esc(t)}">Copy</button>`;
+  const typing = !poll ? false : !!document.querySelector('#main textarea:focus, #main input:focus');
+  if (typing) { S.pt = setTimeout(() => profile(true), 4000); return; }
+  $('#main').innerHTML = `<h2>Profile</h2><p class="sub">Your name line, bio, link, picture and what to do with older posts, written for the account you are building now. These are suggestions you copy in: Reelkit never edits your Instagram profile.</p>
+  <div class="card"><label>Your current name line (optional)</label><input id="pf_name" value="${esc(p?.inputs?.currentName || '')}" placeholder="e.g. NextRoles | CV tips">
+  <label>Your current bio (optional, paste it)</label><textarea id="pf_bio" style="min-height:70px">${esc(p?.inputs?.currentBio || '')}</textarea>
+  <label>What the account posted before (optional)</label><textarea id="pf_old" style="min-height:60px" placeholder="e.g. face-to-camera videos about CVs">${esc(p?.inputs?.oldContent || '')}</textarea>
+  <p class="row"><button id="pf_go" ${running ? 'disabled' : ''}>${running ? 'Working...' : p ? 'Suggest again' : 'Suggest my profile'}</button><span class="mut">One Sonnet call. Uses your brand and research.</span></p>${running ? '<div class="bar"><i style="width:40%"></i></div>' : ''}${job?.status === 'failed' ? `<p class="bad">${esc(job.error)}</p>` : ''}</div>
+  ${p ? `<div class="card"><b>Name line</b><div class="row"><span class="grow">${esc(p.nameField?.value || '')}</span>${copy(p.nameField?.value || '')}</div><p class="mut" style="font-size:13px">${esc(p.nameField?.why || '')}</p></div>
+  <div class="card"><b>Bio options</b>${(p.bios || []).map(x => `<div style="padding:12px 0;border-top:1px solid var(--sep)"><div class="row" style="align-items:flex-start"><div class="grow" style="white-space:pre-wrap">${esc(x.text)}</div>${copy(x.text)}</div><span class="chip">${esc(x.angle || '')}</span> <span class="mut" style="font-size:12px">${x.text.length}/150</span></div>`).join('')}</div>
+  <div class="card"><b>Link</b><p style="margin:6px 0">${esc(p.link?.suggestion || '')}</p><p class="mut" style="font-size:13px">${esc(p.link?.why || '')}</p></div>
+  <div class="card"><b>Profile picture</b><p style="margin:6px 0">${esc(p.picture?.brief || '')}</p><p class="mut" style="font-size:13px">${esc(p.picture?.why || '')}</p></div>
+  <div class="card"><b>Highlights</b><p>${(p.highlights || []).map(h => `<span class="chip" style="margin-right:6px">${esc(h)}</span>`).join('')}</p><b>Pin first</b><ul>${(p.pinned || []).map(x => `<li>${esc(x)}</li>`).join('')}</ul></div>
+  ${p.oldContent ? `<div class="card"><b>What to do with your older posts</b><p style="margin:6px 0">${esc(p.oldContent)}</p></div>` : ''}
+  <div class="card"><b>Apply it, in order</b><ol>${(p.checklist || []).map(x => `<li>${esc(x)}</li>`).join('')}</ol></div>` : ''}`;
+  document.querySelectorAll('[data-copy]').forEach(b => (b.onclick = async () => { try { await navigator.clipboard.writeText(b.dataset.copy); toast('Copied'); } catch { toast('Select the text and copy it'); } }));
+  $('#pf_go').onclick = async () => { await api('/profile', { currentName: $('#pf_name').value, currentBio: $('#pf_bio').value, oldContent: $('#pf_old').value }); toast('Started'); profile(); };
+  if (running) S.pt = setTimeout(() => profile(true), 4000);
 }
 
 // ---------------------------------------------------------------- 05 Analyze

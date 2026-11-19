@@ -6,6 +6,8 @@ const ICON = {
   script: '<path d="M5 6.5h14M5 12h14M5 17.5h8"/>',
   produce: '<rect x="3" y="5" width="18" height="14" rx="3.2"/><path d="m10.3 9.4 4.6 2.6-4.6 2.6z" fill="currentColor"/>',
   footage: '<path d="M4 12v0M8 8.5v7M12 4.5v15M16 8.5v7M20 12v0"/>',
+  library: '<rect x="4" y="4" width="7" height="7" rx="2"/><rect x="13" y="4" width="7" height="7" rx="2"/><rect x="4" y="13" width="7" height="7" rx="2"/><rect x="13" y="13" width="7" height="7" rx="2"/>',
+  profile: '<circle cx="12" cy="9" r="3.6"/><path d="M5 20c.8-3.6 3.6-5.4 7-5.4s6.2 1.8 7 5.4"/>',
   post: '<path d="M21 3 10.5 13.5"/><path d="M21 3l-6.5 18-4-7.5L3 9.5z"/>',
   analyze: '<path d="M5.5 20v-9M12 20V4.5M18.5 20v-6.5"/>',
   repurpose: '<path d="M4 11.5a8 8 0 0 1 14-4.7L20 9"/><path d="M20 4v5h-5"/><path d="M20 12.5a8 8 0 0 1-14 4.7L4 15"/><path d="M4 20v-5h5"/>',
@@ -32,10 +34,10 @@ const tile = (color, icon, size = 18) => `<span class="tile t-${color}">${ic(ico
 
 const NAV = [
   ['Create', [['today', 'Today'], ['swipe', 'Swipe'], ['script', 'Script'], ['produce', 'Produce'], ['footage', 'Footage']]],
-  ['Grow', [['post', 'Post'], ['analyze', 'Analyze'], ['repurpose', 'Repurpose'], ['leads', 'Leads']]],
+  ['Grow', [['library', 'Posts'], ['post', 'Schedule'], ['profile', 'Profile'], ['analyze', 'Analyze'], ['repurpose', 'Repurpose'], ['leads', 'Leads']]],
   ['Studio', [['research', 'Research'], ['claude', 'Claude'], ['setup', 'Settings'], ['guide', 'Guide']]],
 ];
-const TABBAR = ['today', 'produce', 'post', 'analyze'];
+const TABBAR = ['today', 'produce', 'library', 'analyze'];
 function buildNav(active, st) {
   $('#nav').innerHTML = NAV.map(([g, items]) => `<div class="navgrp">${g}</div>` + items.map(([k, l]) => `<a href="#${k}" class="${k === active ? 'on' : ''}">${ic(k, 18)}<span>${l}</span></a>`).join('')).join('');
   const all = NAV.flatMap(([, i]) => i); const label = k => all.find(x => x[0] === k)?.[1];
@@ -64,7 +66,7 @@ const segHtml = (id, options, value) => `<div class="seg" id="${id}">${options.m
 function bindSeg(id, onChange) { const h = document.getElementById(id); h.querySelectorAll('button').forEach(b => (b.onclick = () => { h.querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b)); onChange(b.dataset.v); })); }
 
 /** Claude searches Instagram (in the Reelkit browser) for reels beating their account's usual reach. Resolves with {ok, text}. */
-const JOBNAME = { research: 'the research', autofill: 'reading your website', install: 'an install', 'browser-test': 'the browser test', 'find-refs': 'another search', post: 'a post', analyze: 'analytics', render: 'a render' };
+const JOBNAME = { research: 'the research', autofill: 'reading your website', install: 'an install', 'browser-test': 'the browser test', 'find-refs': 'another search', post: 'a post', profile: 'the profile plan', analyze: 'analytics', render: 'a render' };
 const jobLine = j => (j.status === 'queued' ? (j.queue?.waitingOn ? `Waiting for ${JOBNAME[j.queue.waitingOn.type] || 'another task'} to finish…` : 'Starting…') : (j.log || []).slice(-1)[0] || 'Starting…');
 async function findRefsFlow(keywords, { autoSave = 0, onTick } = {}) {
   const ig = await api('/setup/ig'); if (!ig.loggedIn) return { ok: false, text: ig.browser ? 'Log in to Instagram in the Reelkit browser first.' : 'Open the Reelkit browser and log in to Instagram first (Settings, or the Posting step).' };

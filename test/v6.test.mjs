@@ -165,3 +165,14 @@ test('"found nothing" is reported with Claude\'s explanation, never as success; 
   const ok = applyFound({ reels: [{ url: 'https://www.instagram.com/reel/q1/', creator: 'a', views: 900000, likes: 40000, caption: 'c', followers: 50000 }, { url: 'https://www.instagram.com/reel/q2/', creator: 'b', views: 0, likes: 2000, caption: 'd' }], note: 'ok' }, { niche: 'jobs', autoSave: 1 });
   assert.equal(ok.added, 2); assert.equal(ok.saved, 1); assert.equal(ok.estimated, 1);
 });
+
+test('library: reels land in honest states and post-run presets skip finished steps', async () => {
+  const { postLibrary, startPostRun } = await import('../src/library.mjs'); const { createReel, getMeta, saveMeta, reelDir } = await import('../src/store.mjs'); const fs = await import('node:fs'); const path = await import('node:path');
+  const slug = createReel('Library test reel', '1. hook\n2. body'); fs.mkdirSync(reelDir(slug), { recursive: true }); fs.writeFileSync(path.join(reelDir(slug), 'reel.mp4'), 'x');
+  assert.equal(postLibrary().find(i => i.slug === slug).state, 'draft');
+  const r = startPostRun(slug, 'review'); assert.equal(r.ctx.slug, slug); assert.equal(r.steps.find(s => s.id === 'render').status, 'done'); assert.equal(r.steps.find(s => s.id === 'post').status, 'pending');
+  assert.throws(() => startPostRun(slug), /already in progress/);
+  const { cancelRun } = await import('../src/autopilot.mjs'); cancelRun(r.id);
+  const m = getMeta(slug); m.status = 'posted'; m.postedAt = new Date().toISOString(); saveMeta(slug, m); assert.equal(postLibrary().find(i => i.slug === slug).state, 'posted');
+  assert.throws(() => startPostRun(slug), /already posted/);
+});

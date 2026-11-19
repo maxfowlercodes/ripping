@@ -49,6 +49,8 @@ async function runJobInner(j) {
       j.result = res; log(`Added ${res.added} reels` + (res.saved ? `, saved the top ${res.saved}` : '') + (res.estimated ? ` (${res.estimated} had no visible view count, so views are estimated from likes)` : ''));
     } else if (j.type === 'install') {
       const { runInstaller, INSTALLERS } = await import('./setup.mjs'); j.stage = INSTALLERS[j.payload.id]?.label || 'Installing'; writeJson(jf(j.id), j); await runInstaller(j.payload.id, log);
+    } else if (j.type === 'profile') {
+      const { planProfile } = await import('./profile.mjs'); await planProfile({ ...j.payload, log }); log('Profile plan ready');
     } else if (j.type === 'autofill') {
       const { autofillBrand } = await import('./research.mjs'); const { setAutofill } = await import('./setup.mjs'); const data = await autofillBrand(j.payload.url, { log }); setAutofill({ at: new Date().toISOString(), url: j.payload.url, data });
     } else if (j.type === 'research') {
@@ -71,7 +73,7 @@ async function runJobInner(j) {
 }
 
 // Lanes: different kinds of work run side by side (research never blocks a browser task); within a lane jobs run one at a time.
-export const LANE = { render: 'render', 'footage-analyze': 'render', 'footage-render': 'render', install: 'install', 'browser-test': 'browser', 'find-refs': 'browser', post: 'browser', analyze: 'browser', research: 'llm', autofill: 'llm' };
+export const LANE = { render: 'render', 'footage-analyze': 'render', 'footage-render': 'render', install: 'install', 'browser-test': 'browser', 'find-refs': 'browser', post: 'browser', analyze: 'browser', research: 'llm', autofill: 'llm', profile: 'llm' };
 export const laneOf = type => LANE[type] || 'misc';
 const activeLane = new Map(); // lane -> job id running in THIS process
 export function tick() {
@@ -101,7 +103,7 @@ export function cancelJob(id) {
   if (j.status === 'queued') { upd(j, { status: 'cancelled', cancel: true }); return getJob(id); }
   upd(j, { cancel: true }); return getJob(id); // running: the worker notices within a second and stops Claude
 }
-const TITLES = { 'find-refs': 'Finding references on Instagram', 'browser-test': 'Testing browser control', research: 'Deep research', autofill: 'Reading your website', install: 'Installing', render: 'Rendering', 'footage-analyze': 'Transcribing footage', 'footage-render': 'Cutting footage', post: 'Posting', analyze: 'Reading insights' };
+const TITLES = { 'find-refs': 'Finding references on Instagram', 'browser-test': 'Testing browser control', research: 'Deep research', autofill: 'Reading your website', profile: 'Planning your profile', install: 'Installing', render: 'Rendering', 'footage-analyze': 'Transcribing footage', 'footage-render': 'Cutting footage', post: 'Posting', analyze: 'Reading insights' };
 /** Everything running or recently finished, for the global Running tasks box. */
 export function activeTasks() {
   const now = Date.now(); const out = [];
