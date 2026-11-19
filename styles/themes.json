@@ -1,0 +1,8 @@
+{
+  "saas-dark":   { "bg": ["0x0b0f1a", "0x1a2340"], "fg": "white",   "accent": "0x4ade80", "font": 78, "pace": 1.0 },
+  "saas-light":  { "bg": ["0xf8fafc", "0xdbeafe"], "fg": "0x0f172a", "accent": "0x2563eb", "font": 78, "pace": 1.0 },
+  "hyper-volt":  { "bg": ["0x000000", "0x1b0033"], "fg": "0xe6ff00", "accent": "0xff00aa", "font": 88, "pace": 0.9 },
+  "ledger-mint": { "bg": ["0xf0fdf4", "0xbbf7d0"], "fg": "0x052e16", "accent": "0x16a34a", "font": 74, "pace": 1.05 },
+  "news-desk":   { "bg": ["0x7f1d1d", "0x111827"], "fg": "white",   "accent": "0xfacc15", "font": 70, "pace": 1.0 },
+  "sunset":      { "bg": ["0xff7e5f", "0x6a1b9a"], "fg": "white",   "accent": "0xffe66d", "font": 80, "pace": 1.0 }
+}
