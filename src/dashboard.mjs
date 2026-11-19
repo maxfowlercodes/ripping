@@ -65,6 +65,7 @@ export function startDashboard({ port = 4177, lan = false, worker = true, open =
       } else if (req.headers.host && !/^(localhost|127\.0\.0\.1)(:\d+)?$/.test(req.headers.host)) return send(res, 403, 'localhost only (use --lan for phone access)', 'text/plain'); // DNS-rebinding guard
       const p = u.pathname; const body = req.method === 'POST' && p !== '/api/footage/upload' ? await readBody(req) : {};
 
+      if (p === '/healthz') return send(res, 200, { ok: true, app: 'reelkit' });
       if (p === '/api/state') {
         if (!stylesCache) { try { const cat = loadCatalog(); stylesCache = Object.keys(cat).length ? Object.values(cat).map(c => ({ name: c.name, desc: c.desc, tags: c.tags, presenter: c.presenter })) : await styleList(); } catch { stylesCache = []; } }
         return send(res, 200, { onboarding: getOnboarding(), mode: getSettings().mode, calls: usageToday().calls, reels: listReels(), styles: stylesCache, accounts: listAccounts(), jobs: listJobs(12), provider: detectProvider('auto'),
@@ -186,6 +187,7 @@ export function startDashboard({ port = 4177, lan = false, worker = true, open =
       send(res, 404, 'not found', 'text/plain');
     } catch (e) { send(res, 500, { error: e.message }); }
   });
+  srv.on('error', e => { if (e.code === 'EADDRINUSE') console.error(`Port ${port} is already in use by another program. Close it, or start Reelkit on another port: node bin/reelkit.mjs dashboard --port ${port + 1}`); else console.error('Reelkit could not start: ' + e.message); stop(); process.exit(1); });
   srv.listen(port, lan ? '0.0.0.0' : '127.0.0.1', () => {
     console.log(`Reelkit dashboard: http://localhost:${port}`);
     if (lan) { const ip = Object.values(os.networkInterfaces()).flat().find(i => i && i.family === 'IPv4' && !i.internal)?.address || '<your-pc-ip>'; console.log(`Phone (same Wi-Fi): http://${ip}:${port}/?token=${token}   <- keep this link private`); }
@@ -198,6 +200,12 @@ export function startDashboard({ port = 4177, lan = false, worker = true, open =
 
 /** Open the dashboard in its own app-style window (Edge/Chrome --app mode): no tabs, no address bar. */
 export function openAppWindow(url) {
+  if (process.env.REELKIT_NO_WINDOW) return;
   const exe = findBrowser(); if (!exe) { console.log('Open ' + url + ' in your browser.'); return; }
   const p = spawn(exe, [`--app=${url}`, `--user-data-dir=${ensureDir(path.join(home(), 'app-profile'))}`, '--window-size=1240,900', '--no-first-run', '--no-default-browser-check'], { detached: true, stdio: 'ignore' }); p.unref();
+}
+
+/** Is a Reelkit dashboard already answering on this port? */
+export function reelkitRunning(port) {
+  return new Promise(res => { const q = http.get({ host: '127.0.0.1', port, path: '/healthz', timeout: 1500 }, r => { let b = ''; r.on('data', d => (b += d)); r.on('end', () => { try { res(JSON.parse(b).app === 'reelkit'); } catch { res(false); } }); }); q.on('error', () => res(false)); q.on('timeout', () => { q.destroy(); res(false); }); });
 }

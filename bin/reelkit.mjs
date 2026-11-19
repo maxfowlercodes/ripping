@@ -8,7 +8,7 @@ import { detectProvider } from '../src/voice.mjs';
 import { publishReel, accountInsights } from '../src/instagram.mjs';
 import { createReel, getMeta, saveMeta, listReels, scriptPath, reelDir } from '../src/store.mjs';
 import { has, home, findFont, ensureMediaTools } from '../src/util.mjs';
-import { startDashboard } from '../src/dashboard.mjs';
+import { startDashboard, openAppWindow, reelkitRunning } from '../src/dashboard.mjs';
 import { applySecrets, addAccount, setKey, listAccounts, secretsPath } from '../src/accounts.mjs';
 import { browserAvailable, findBrowser, launch } from '../src/browser.mjs';
 import { summary, snapshotDue, calibrate } from '../src/analytics.mjs';
@@ -153,7 +153,9 @@ try {
     case 'rank': { const r = summary().rank; console.log(`${r.name}  (${r.total} views)${r.next ? `  next: ${r.next.name} at ${r.next.at}` : ''}`); break; }
     case 'calibrate': console.log(JSON.stringify(calibrate(), null, 2)); break;
     case 'worker': { if (!flags.child) console.log('worker running (Ctrl+C to stop): renders, scheduled posts, daily check-ins, analytics'); startWorker(); const bc = getBrand().chat; if (bc.enabled) { const cs = await startChatServer({ tunnel: bc.tunnel }); if (cs.status.url) console.log('Business chat link: ' + cs.status.url + (cs.status.error ? '  (' + cs.status.error + ')' : '')); } setInterval(() => {}, 1 << 30); break; }
-    case 'dashboard': startDashboard({ port: Number(flags.port) || 4177, lan: !!flags.lan, worker: !flags['no-worker'], open: !!flags.open }); break;
+    case 'open': { const port = Number(flags.port) || 4177; if (!(await reelkitRunning(port))) throw new Error('Reelkit is not running. Start it with: npm start'); openAppWindow(`http://localhost:${port}/`); console.log('Opened Reelkit.'); break; }
+    case 'dashboard': { const port0 = Number(flags.port) || 4177; if (await reelkitRunning(port0)) { console.log(`Reelkit is already running at http://localhost:${port0}/`); if (flags.open) openAppWindow(`http://localhost:${port0}/`); process.exit(0); } }
+      startDashboard({ port: Number(flags.port) || 4177, lan: !!flags.lan, worker: !flags['no-worker'], open: !!flags.open }); break;
     default: console.log(help);
   }
 } catch (e) { console.error('Error: ' + e.message); process.exit(1); }

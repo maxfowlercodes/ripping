@@ -46,3 +46,19 @@ test('job polling endpoint is cheap, validated, and history is bounded', async (
   const srv = startDashboard({ port: 4312, worker: false }); await new Promise(r => setTimeout(r, 300));
   try { const r = await call(4312, '/api/job/' + j.id); assert.equal(r.code, 200); assert.equal(r.json.type, 'install'); assert.equal((await call(4312, '/api/job/abcdefgh')).code, 404); } finally { srv.close(); }
 });
+
+import { spawnSync, spawn } from 'node:child_process';
+const cli = (args, env = {}) => new Promise(res => { const p = spawn(process.execPath, [path.join(import.meta.dirname, '..', 'bin', 'reelkit.mjs'), ...args], { env: { ...process.env, REELKIT_NO_WINDOW: '1', ...env } }); let out = '', err = ''; p.stdout.on('data', d => (out += d)); p.stderr.on('data', d => (err += d)); const to = setTimeout(() => p.kill(), 9000); p.on('close', code => { clearTimeout(to); res({ status: code, stdout: out, stderr: err }); }); });
+test('starting Reelkit twice reuses the running instance instead of failing silently', async () => {
+  const srv = startDashboard({ port: 4313, worker: false }); await new Promise(r => setTimeout(r, 400));
+  try {
+    const hz = await call(4313, '/healthz'); assert.equal(hz.json.app, 'reelkit');
+    const t0 = Date.now(); const r = await cli(['dashboard', '--port', '4313', '--open']); assert.equal(r.status, 0, r.stderr); assert.match(r.stdout, /already running/); assert.ok(Date.now() - t0 < 5000);
+    const o = await cli(['open', '--port', '4313']); assert.equal(o.status, 0, o.stderr); assert.match(o.stdout, /Opened Reelkit/);
+    const none = await cli(['open', '--port', '4399']); assert.notEqual(none.status, 0); assert.match(none.stderr, /not running/);
+  } finally { srv.close(); }
+});
+test('a port taken by another program gives a clear message, not silence', async () => {
+  const blocker = http.createServer((q, r) => r.end('x')).listen(4314); await new Promise(r => setTimeout(r, 200));
+  try { const r = await cli(['dashboard', '--port', '4314', '--no-worker']); assert.notEqual(r.status, 0); assert.match(r.stderr, /already in use by another program/); } finally { blocker.close(); }
+});

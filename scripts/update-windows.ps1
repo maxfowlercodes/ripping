@@ -12,4 +12,5 @@ Get-ChildItem $src -Force | Where-Object { $_.Name -notin @('reelkit-data', 'nod
 Remove-Item $tmp -Recurse -Force
 Set-Location $root
 npm install --no-audit --no-fund
+& powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $root "scripts\create-shortcut.ps1")   # refresh the Desktop shortcut
 Write-Host "`nUpdated. Start Reelkit from the Desktop shortcut."

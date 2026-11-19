@@ -1,4 +1,3 @@
 @echo off
-rem Double-click to start Reelkit in its own window (uses Edge/Chrome app mode, no installer needed).
-cd /d "%~dp0.."
-start "" /min wscript.exe "%~dp0Reelkit-hidden.vbs"
+rem Double-click to start Reelkit. Hidden, with logs, and a message box if it cannot start.
+powershell -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "%~dp0start-windows.ps1"
