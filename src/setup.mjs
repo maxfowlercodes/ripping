@@ -22,14 +22,25 @@ export function claudeStatus() {
 }
 
 const portOpen = port => new Promise(res => { const s = net.connect(port, '127.0.0.1'); s.on('connect', () => { s.destroy(); res(true); }); s.on('error', () => res(false)); setTimeout(() => { s.destroy(); res(false); }, 700); });
-/** Is the dedicated Reelkit browser running, and is it logged in to Instagram? (session cookie present; no page content is read) */
+/** Read cookies through the browser-level DevTools socket. Unlike Playwright's connectOverCDP this attaches to NO page,
+ *  so it cannot flip the page's emulated colour scheme (the light/dark flicker the old 3-second poll caused). */
+export async function browserCookies(port = CDP_PORT) {
+  if (typeof WebSocket === 'undefined') return null; // Node < 22: no built-in WebSocket
+  const v = await (await fetch(`http://127.0.0.1:${port}/json/version`, { signal: AbortSignal.timeout(2500) })).json();
+  return new Promise((resolve, reject) => {
+    const ws = new WebSocket(v.webSocketDebuggerUrl); const t = setTimeout(() => { try { ws.close(); } catch {} reject(new Error('devtools timeout')); }, 4000);
+    ws.onopen = () => ws.send(JSON.stringify({ id: 1, method: 'Storage.getCookies' }));
+    ws.onmessage = e => { const m = JSON.parse(e.data); if (m.id === 1) { clearTimeout(t); ws.close(); m.error ? reject(new Error(m.error.message)) : resolve(m.result.cookies || []); } };
+    ws.onerror = () => { clearTimeout(t); reject(new Error('devtools connection failed')); };
+  });
+}
+/** Is the dedicated Reelkit browser running, and is it logged in to Instagram? (session cookie only; no page content is read) */
 export async function igStatus(host = (process.env.REELKIT_IG_URL || 'https://www.instagram.com')) {
   if (!(await portOpen(CDP_PORT))) return { browser: false, loggedIn: false };
-  const pw = loadPlaywright(); if (!pw) return { browser: true, loggedIn: false, error: 'playwright-core missing' };
   try {
-    const b = await pw.chromium.connectOverCDP(`http://127.0.0.1:${CDP_PORT}`); const cookies = await b.contexts()[0].cookies(host); await b.close();
-    return { browser: true, loggedIn: cookies.some(c => c.name === 'sessionid' && c.value) };
-  } catch (e) { return { browser: true, loggedIn: false, error: e.message.split('\n')[0] }; }
+    const cookies = await browserCookies(); if (cookies === null) return { browser: true, loggedIn: null, note: 'needs Node 22+ for automatic detection' };
+    const h = new URL(host).hostname; return { browser: true, loggedIn: cookies.some(c => c.name === 'sessionid' && c.value && h.endsWith(c.domain.replace(/^\./, ''))) };
+  } catch (e) { return { browser: true, loggedIn: false, error: e.message }; }
 }
 
 /** Rows for the wizard. fix.kind: install (one click) | terminal | open (launch browser) | manual (text only) */
@@ -97,3 +108,5 @@ export const getOnboarding = () => readJson(stateFile(), {}).onboarding || { ste
 export const setOnboarding = patch => { const s = readJson(stateFile(), {}); s.onboarding = { ...(s.onboarding || { step: 0, done: false }), ...patch }; writeJson(stateFile(), s); return s.onboarding; };
 export const getAutofill = () => readJson(stateFile(), {}).autofill || null;
 export const setAutofill = v => { const s = readJson(stateFile(), {}); s.autofill = v; writeJson(stateFile(), s); };
+export const getBrowserTest = () => readJson(stateFile(), {}).browserTest || null;
+export const setBrowserTest = v => { const s = readJson(stateFile(), {}); s.browserTest = v; writeJson(stateFile(), s); };

@@ -25,7 +25,8 @@ export async function ensureBrowser(url = IG_URL() + '/') {
   throw new Error('Browser did not open its debugging port.');
 }
 
-export const mcpConfig = () => ({ mcpServers: { playwright: { command: 'npx', args: ['-y', '@playwright/mcp@latest', '--cdp-endpoint', `http://127.0.0.1:${CDP_PORT}`] } } });
+// On native Windows npx is a .cmd shim, so it must be started through cmd /c (Claude Code's own docs say the same).
+export const mcpConfig = (platform = process.platform) => { const a = ['-y', '@playwright/mcp@latest', '--cdp-endpoint', `http://127.0.0.1:${CDP_PORT}`]; return { mcpServers: { playwright: platform === 'win32' ? { command: 'cmd', args: ['/c', 'npx', ...a] } : { command: 'npx', args: a } } }; };
 export const ALLOWED = ['mcp__playwright'];
 
 export const SAFETY = () => `You are operating the user's OWN Instagram account in a dedicated browser window that is already open and logged in. You may only: navigate within ${new URL(IG_URL()).host}, use the web post composer to create the one reel described, and read analytics pages. You must NOT: follow/unfollow, like, comment, send messages, edit the profile or settings, change passwords/2FA, open any other website, or type credentials. If you see a login page, checkpoint, captcha, "suspicious activity" notice or any unexpected dialog, STOP and report it instead of continuing. Work efficiently: prefer accessibility snapshots over screenshots, never repeat a failed action more than twice.`;
@@ -67,4 +68,29 @@ export async function researchReels({ handles = [], hashtags = [], max = 12, log
   const targets = [...handles.map(h => `${IG_URL()}/${h.replace('@', '')}/reels/`), ...hashtags.map(h => `${IG_URL()}/explore/tags/${h.replace('#', '')}/`)];
   const prompt = `Read-only research. Visit each page below, and from the reel grid note view counts. Pick the reels with the highest views relative to the account's usual reels (max ${max} in total). For each, open it to read the full caption and likes/comments, and note the account's follower count. Pages:\n${targets.join('\n')}\nReturn JSON {reels:[{url, creator, views, likes, comments, caption, followers}]}. Do not like, follow or comment.`;
   const r = await askClaude({ task: 'computer_research', prompt, system: SAFETY(), schema: researchSchema, mcpConfig: mcpConfig(), allowedTools: ALLOWED, timeoutMs: 900000, force: true, log }); return r.output.reels;
+}
+
+const checkSchema = { type: 'object', properties: { loggedIn: { type: 'boolean' }, username: { type: 'string' }, note: { type: 'string' } }, required: ['loggedIn'] };
+/** Read-only end-to-end test: Claude CLI -> Playwright MCP -> the Reelkit browser -> Instagram. Also finds your @username. */
+export async function checkInstagram({ log } = {}) {
+  await ensureBrowser();
+  const prompt = `Read-only check. Open ${IG_URL()}/ . Decide whether you are logged in (you can see the home feed or a left menu with a Profile entry) or logged out (a login form is shown). If logged in, open the Profile link in the left menu and report the @username exactly as shown. Do not click anything else. Reply JSON {loggedIn, username, note}.`;
+  const r = await askClaude({ task: 'computer_check', prompt, system: SAFETY(), schema: checkSchema, mcpConfig: mcpConfig(), allowedTools: ALLOWED, maxTurns: 14, timeoutMs: 240000, force: true, log });
+  return r.output;
+}
+
+const findSchema = { type: 'object', properties: { reels: { type: 'array', items: { type: 'object', properties: { url: { type: 'string' }, creator: { type: 'string' }, views: { type: 'number' }, likes: { type: 'number' }, comments: { type: 'number' }, caption: { type: 'string' }, followers: { type: 'number' }, postedAgo: { type: 'string' } }, required: ['url', 'creator', 'views', 'caption'] } }, note: { type: 'string' } }, required: ['reels'] };
+export const searchUrl = kw => `${IG_URL()}/explore/search/keyword/?q=${encodeURIComponent(kw)}`;
+export function findPrompt({ keywords, max }) {
+  return `Read-only research on Instagram: find Reels in this niche that are performing unusually well RIGHT NOW.
+Keywords: ${keywords.map(k => `"${k}"`).join(', ')}.
+For each keyword open ${searchUrl('<keyword>')} (replace <keyword>, URL-encoded). If that page shows no results, use the Search item in the left menu, type the keyword, and look at the Reels results. Look only at Reels from roughly the last 30 days. Scroll at most 2 screens per keyword, at a human pace.
+From the grids, pick the reels with the highest view counts. Open up to ${max} reels in total (spread across keywords) and read: the exact reel URL, the creator @handle, views, likes, comments, the first 200 characters of the caption, and how long ago it was posted. For each distinct creator, open their profile ONCE and read the follower count (needed to judge whether the reel beat their usual reach).
+Stay under 40 page actions in total. Do not like, follow, save, comment or message anything. Return JSON {reels:[{url,creator,views,likes,comments,caption,followers,postedAgo}], note}. Convert counts like "1.2M" or "58K" to plain numbers. If you cannot see a number, use 0 and say so in note.`;
+}
+/** Claude searches Instagram for you: keyword -> top recent reels -> outlier candidates for the Swipe feed. */
+export async function findReels({ keywords, max = 10, log } = {}) {
+  await ensureBrowser(); const kw = keywords.map(k => String(k).trim()).filter(Boolean).slice(0, 5); if (!kw.length) throw new Error('Give at least one keyword');
+  const r = await askClaude({ task: 'computer_research', prompt: findPrompt({ keywords: kw, max: Math.min(15, Math.max(3, max)) }), system: SAFETY(), schema: findSchema, mcpConfig: mcpConfig(), allowedTools: ALLOWED, maxTurns: 45, timeoutMs: 900000, force: true, log });
+  return r.output;
 }

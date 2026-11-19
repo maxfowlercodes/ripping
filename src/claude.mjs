@@ -30,6 +30,7 @@ export const TASKS = {
   research_audience: { desc: 'First-run: who buys, their pains and exact words (web search)', eco: 'sonnet', balanced: 'sonnet', quality: 'opus', effort: 'medium', ttlDays: 30, web: true },
   research_competitors: { desc: 'First-run: competitors, adjacent accounts, angles (web search)', eco: 'sonnet', balanced: 'sonnet', quality: 'opus', effort: 'medium', ttlDays: 30, web: true },
   research_strategy: { desc: 'First-run: pillars, 10 starter ideas, do-not-say list', eco: 'sonnet', balanced: 'sonnet', quality: 'opus', effort: 'medium', ttlDays: 30 },
+  computer_check:    { desc: 'Check the browser works and you are logged in (read-only)', eco: 'haiku', balanced: 'haiku', quality: 'sonnet', effort: 'low', ttlDays: 0, computer: true, escalate: true },
   computer_post:     { desc: 'Drive the browser to post a reel',                        eco: 'haiku',  balanced: 'haiku',  quality: 'sonnet', effort: 'low',    ttlDays: 0, computer: true, escalate: true },
   computer_insights: { desc: 'Read reel insights off the website',                      eco: 'haiku',  balanced: 'haiku',  quality: 'sonnet', effort: 'low',    ttlDays: 0, computer: true, escalate: true },
   computer_research: { desc: 'Browse competitors/hashtags and list outlier reels',      eco: 'haiku',  balanced: 'sonnet', quality: 'sonnet', effort: 'low',    ttlDays: 1, computer: true, escalate: true },

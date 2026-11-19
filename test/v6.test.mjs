@@ -78,3 +78,34 @@ test('reelkit stop shuts the app and its worker down, and no worker is left behi
   assert.equal(await reelkitRunning(4317), false); assert.match((await cli(['stop', '--port', '4317'])).stdout, /not running/);
   await new Promise(r => setTimeout(r, 800)); const left = spawnSync('pgrep', ['-f', 'reelkit.mjs worker --child'], { encoding: 'utf8' }); assert.equal(left.stdout.trim(), '', 'no orphan worker');
 });
+
+const { mcpConfig, findPrompt, searchUrl } = await import('../src/computer.mjs');
+test('Windows launches the browser-control server through cmd /c npx; other platforms use npx directly', () => {
+  const w = mcpConfig('win32').mcpServers.playwright; assert.equal(w.command, 'cmd'); assert.deepEqual(w.args.slice(0, 3), ['/c', 'npx', '-y']); assert.ok(w.args.some(a => a.startsWith('--cdp-endpoint')) || w.args.includes('--cdp-endpoint'));
+  const l = mcpConfig('linux').mcpServers.playwright; assert.equal(l.command, 'npx'); assert.equal(l.args[0], '-y');
+});
+test('find-references prompt: keywords, search URL, recency, read-only limits', () => {
+  assert.match(searchUrl('cv tips & more'), /explore\/search\/keyword\/\?q=cv%20tips%20%26%20more$/);
+  const p = findPrompt({ keywords: ['cv tips', 'job interview'], max: 8 }); for (const x of ['"cv tips"', '"job interview"', 'last 30 days', 'ONCE', 'follower count', 'Do not like, follow, save, comment or message', '40 page actions', 'Open up to 8 reels']) assert.ok(p.includes(x), x);
+});
+test('refs/find and browser/test endpoints validate input and enqueue jobs', async () => {
+  const srv = startDashboard({ port: 4318, worker: false }); await new Promise(r => setTimeout(r, 300));
+  try {
+    assert.equal((await call(4318, '/api/refs/find', { keywords: '' })).code, 400); assert.equal((await call(4318, '/api/refs/find', { keywords: '<>,;;;{}' })).code, 400);
+    const r = await call(4318, '/api/refs/find', { keywords: ['cv tips', 'a;b', 'c', 'd', 'e', 'f', 'g'], max: 999, autoSave: 99 }); assert.equal(r.code, 200); const j = r.json;
+    assert.equal(j.type, 'find-refs'); assert.equal(j.payload.keywords.length, 5); assert.ok(j.payload.keywords.every(k => !/[;<>]/.test(k))); assert.equal(j.payload.max, 15); assert.equal(j.payload.autoSave, 8);
+    const b = await call(4318, '/api/browser/test', {}); assert.equal(b.json.type, 'browser-test'); assert.equal((await call(4318, '/api/browser/test')).code, 200);
+  } finally { srv.close(); }
+});
+test('login detection does not change the page colour scheme (no light/dark flicker)', async t => {
+  const { findBrowser } = await import('../src/browser.mjs'); const exe = findBrowser(); if (!exe) return t.skip('no browser');
+  const port = 9603; process.env.REELKIT_CDP_PORT = String(port); const site = http.createServer((q, r) => { r.writeHead(200, { 'content-type': 'text/html' }); r.end('<title>x</title>'); }).listen(8772);
+  const chrome = spawn(exe, ['--headless=new', '--no-sandbox', `--remote-debugging-port=${port}`, '--force-dark-mode', '--enable-features=WebContentsForceDark', `--user-data-dir=${path.join(process.env.REELKIT_HOME, 'flick')}`, 'http://localhost:8772/'], { stdio: 'ignore' });
+  try {
+    for (let i = 0; i < 30; i++) { try { await fetch(`http://127.0.0.1:${port}/json/version`); break; } catch { await new Promise(r => setTimeout(r, 200)); } }
+    const scheme = async () => { const list = await (await fetch(`http://127.0.0.1:${port}/json/list`)).json(); const pg = list.find(x => x.type === 'page'); const ws = new WebSocket(pg.webSocketDebuggerUrl); return new Promise(res => { ws.onopen = () => ws.send(JSON.stringify({ id: 1, method: 'Runtime.evaluate', params: { expression: "matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'", returnByValue: true } })); ws.onmessage = e => { const m = JSON.parse(e.data); if (m.id === 1) { ws.close(); res(m.result.result.value); } }; }); };
+    const { browserCookies } = await import('../src/setup.mjs'); assert.equal(await scheme(), 'dark'); const seen = new Set();
+    for (let i = 0; i < 8; i++) { const c = await browserCookies(port); assert.ok(Array.isArray(c)); seen.add(await scheme()); }
+    assert.deepEqual([...seen], ['dark'], 'colour scheme stayed dark during repeated login checks');
+  } finally { chrome.kill(); site.close(); delete process.env.REELKIT_CDP_PORT; }
+});

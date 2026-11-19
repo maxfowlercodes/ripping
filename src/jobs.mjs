@@ -38,6 +38,14 @@ export async function runJob(j) {
       const r = await renderReel2({ script: sc, style: st, voice: voice || 'auto', lang: lang || m.lang || 'en', music: music || m.music, out, draft: !!draft, avatarFile, workDir: path.join(reelDir(slug), 'work'), onLog: log,
         onProgress: ({ stage, done, total }) => { j.stage = stage; j.progress = +(((stage === 'voice' ? 0 : 0.2) + (done / total) * (stage === 'voice' ? 0.2 : 0.8)).toFixed(2)); writeJson(jf(j.id), j); } });
       const m2 = getMeta(slug); Object.assign(m2, { durations: r.durations, seconds: r.seconds, style: st, lang: lang || m2.lang || 'en', rendered: new Date().toISOString() }); if (!draft && m2.status !== 'posted' && m2.status !== 'scheduled') m2.status = 'rendered'; saveMeta(slug, m2);
+    } else if (j.type === 'browser-test') {
+      const { checkInstagram } = await import('./computer.mjs'); const { setBrowserTest } = await import('./setup.mjs'); const r = await checkInstagram({ log }); setBrowserTest({ at: new Date().toISOString(), ...r });
+      if (r.loggedIn && r.username) { const { saveBrand } = await import('./brand.mjs'); const u = r.username.replace(/^@/, ''); if (/^[\w.]{1,30}$/.test(u)) saveBrand({ posting: { username: u } }); }
+    } else if (j.type === 'find-refs') {
+      const { findReels } = await import('./computer.mjs'); const sw = await import('./swipe.mjs'); const out = await findReels({ keywords: j.payload.keywords, max: j.payload.max, log });
+      const rows = (out.reels || []).filter(x => x.url && x.views > 0); const med = (() => { const a = rows.map(x => x.views).sort((p, q) => p - q); return a.length ? a[Math.floor(a.length / 2)] : 0; })();
+      const added = rows.map(x => sw.addItem({ url: x.url, creator: String(x.creator || '').replace(/^@/, ''), views: x.views, likes: x.likes, comments: x.comments, caption: x.caption, followers: x.followers, baseline: x.followers || med, niche: j.payload.niche || 'general', source: 'search' }));
+      const keep = Math.max(0, j.payload.autoSave || 0); added.sort((a, b) => b.multiplier - a.multiplier).slice(0, keep).forEach(x => sw.decide(x.id, 'saved')); log(`added ${added.length} reels, saved the top ${Math.min(keep, added.length)}`);
     } else if (j.type === 'install') {
       const { runInstaller, INSTALLERS } = await import('./setup.mjs'); j.stage = INSTALLERS[j.payload.id]?.label || 'Installing'; writeJson(jf(j.id), j); await runInstaller(j.payload.id, log);
     } else if (j.type === 'autofill') {

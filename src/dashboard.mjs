@@ -26,7 +26,7 @@ import { addFromText } from './swipe.mjs';
 import { ensureBrowser } from './computer.mjs';
 import { getLeads, leadsCsv, statusFile } from './chat.mjs';
 import { loadCatalog } from './stylecatalog.mjs';
-import { systemCheck, INSTALLERS, openClaudeLogin, igStatus, getOnboarding, setOnboarding, getAutofill } from './setup.mjs';
+import { systemCheck, INSTALLERS, openClaudeLogin, igStatus, getOnboarding, setOnboarding, getAutofill, getBrowserTest } from './setup.mjs';
 import { getResearch } from './research.mjs';
 import { voiceCatalog, synth } from './voice.mjs';
 import { browserAvailable, findBrowser } from './browser.mjs';
@@ -111,6 +111,13 @@ export function startDashboard({ port = 4177, lan = false, worker = true, open =
       if (p === '/api/setup/check') return send(res, 200, { rows: await systemCheck() });
       if (p === '/api/setup/install' && req.method === 'POST') { if (typeof body.id !== 'string' || !Object.hasOwn(INSTALLERS, body.id)) return send(res, 400, { error: 'unknown installer' }); return send(res, 200, enqueue('install', { id: body.id })); }
       if (p === '/api/setup/claude-login' && req.method === 'POST') { openClaudeLogin(); return send(res, 200, { ok: true }); }
+      if (p === '/api/browser/test' && req.method === 'POST') return send(res, 200, enqueue('browser-test', {}));
+      if (p === '/api/browser/test') return send(res, 200, { result: getBrowserTest() });
+      if (p === '/api/refs/find' && req.method === 'POST') {
+        const kw = (Array.isArray(body.keywords) ? body.keywords : String(body.keywords || '').split(',')).map(k => String(k).replace(/[^\p{L}\p{N} #'&-]/gu, '').trim()).filter(Boolean).slice(0, 5);
+        if (!kw.length) return send(res, 400, { error: 'Add at least one keyword.' });
+        return send(res, 200, enqueue('find-refs', { keywords: kw, max: Math.min(15, Math.max(3, Number(body.max) || 10)), autoSave: Math.min(8, Math.max(0, Number(body.autoSave) || 0)), niche: getBrand().niche || 'general' }));
+      }
       if (p === '/api/setup/ig') return send(res, 200, await igStatus());
       if (p === '/api/setup/autofill' && req.method === 'POST') { const u = String(body.url || '').trim(); if (!/^https?:\/\/[^\s]+$/i.test(u)) return send(res, 400, { error: 'Enter a full address like https://yoursite.com' }); return send(res, 200, enqueue('autofill', { url: u })); }
       if (p === '/api/setup/autofill') return send(res, 200, { result: getAutofill() });

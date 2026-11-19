@@ -62,3 +62,12 @@ const swHtml = (id, on) => `<input type="checkbox" class="sw" id="${id}" ${on ? 
 const swRow = (id, label, on, hint) => `<label class="swrow"><span>${label}${hint ? `<span class="mut" style="display:block;font-size:13px">${hint}</span>` : ''}</span>${swHtml(id, on)}</label>`;
 const segHtml = (id, options, value) => `<div class="seg" id="${id}">${options.map(([v, l]) => `<button type="button" data-v="${esc(v)}" class="${v === value ? 'on' : ''}">${esc(l)}</button>`).join('')}</div>`;
 function bindSeg(id, onChange) { const h = document.getElementById(id); h.querySelectorAll('button').forEach(b => (b.onclick = () => { h.querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b)); onChange(b.dataset.v); })); }
+
+/** Claude searches Instagram (in the Reelkit browser) for reels beating their account's usual reach. Resolves with {ok, text}. */
+async function findRefsFlow(keywords, { autoSave = 0, onTick } = {}) {
+  const ig = await api('/setup/ig'); if (!ig.loggedIn) return { ok: false, text: ig.browser ? 'Log in to Instagram in the Reelkit browser first.' : 'Open the Reelkit browser and log in to Instagram first (Settings, or the Posting step).' };
+  const job = await api('/refs/find', { keywords, max: 10, autoSave });
+  return new Promise(done => { let busy = false; const t = setInterval(async () => { if (busy) return; busy = true; let j = null; try { j = await api('/job/' + job.id); } catch {} busy = false; if (!j) return; onTick && onTick(j);
+    if (j.status === 'done') { clearInterval(t); done({ ok: true, text: (j.log || []).slice(-1)[0] || 'Done' }); } else if (j.status === 'failed') { clearInterval(t); done({ ok: false, text: j.error || 'Failed' }); } }, 2000); S.timers.push(t); });
+}
+async function suggestKeywords() { const { brand: b } = await api('/brand'); let tags = []; try { const r = await api('/research'); tags = (r.research?.data?.competitors?.hashtags || []).map(h => h.replace(/^#/, '')); } catch {} return [...new Set([b.niche, ...tags].map(x => (x || '').trim()).filter(Boolean))].slice(0, 3).join(', '); }
