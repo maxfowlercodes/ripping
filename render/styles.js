@@ -35,4 +35,28 @@
   R('clean-white',  { desc: 'Minimal white', font: 'Inter', bg: 'flat', key: 'highlight', progressBar: true,
     colors: { bg1: '#ffffff', bg2: '#f1f5f9', accent: '#2563eb', fg: '#0f172a', keyFg: '#ffffff', card: '#f8fafc', cardFg: '#0f172a' }, caption: cap({}) });
   R('clean-black',  { extends: 'clean-white', colors: { bg1: '#000000', bg2: '#0a0a0a', accent: '#38bdf8', fg: '#ffffff', keyFg: '#001018', card: '#111827', cardFg: '#f9fafb' } });
+
+  // ---- v2 styles: transitions, camera moves, grain, presenters
+  R('mesh-glow',    { desc: 'Drifting colour-mesh glow, gradient key words, wipe transitions', font: 'Inter', bg: 'mesh', key: 'gradient', transition: 'wipe', grain: 0.08,
+    colors: { bg1: '#07070f', bg2: '#312e81', accent: '#a78bfa', accent2: '#34d399', ribbon1: '#f472b6', fg: '#ffffff', keyFg: '#07070f', card: '#12121f', cardFg: '#f1f5f9' }, caption: cap({}) });
+  R('neon-night',   { desc: 'Floating particles, neon highlighter, glitch cuts', font: 'Inter', bg: 'particles', key: 'highlight', transition: 'glitch', grain: 0.06,
+    colors: { bg1: '#05010f', bg2: '#1a0b3d', accent: '#22d3ee', accent2: '#f0abfc', fg: '#ffffff', keyFg: '#05010f', card: '#100824', cardFg: '#f5f3ff' }, caption: cap({ weight: 900 }) });
+  R('bold-stripes', { desc: 'Sports-broadcast stripes, flash cuts, upper-case', font: 'Inter', bg: 'stripes', key: 'highlight', transition: 'flash', camera: 0.045,
+    colors: { bg1: '#facc15', bg2: '#eab308', accent: '#111827', fg: '#111827', keyFg: '#facc15', card: '#ffffff', cardFg: '#111827' }, caption: cap({ upper: true, weight: 900, ls: '-0.03em' }) });
+  R('spotlight',    { desc: 'Stage spotlight on black, warm underline key words', font: 'Inter', bg: 'spotlight', key: 'underline', transition: 'zoom', grain: 0.07,
+    colors: { bg1: '#050505', bg2: '#27272a', accent: '#fbbf24', fg: '#fafafa', keyFg: '#050505', card: '#18181b', cardFg: '#fafafa' }, caption: cap({ weight: 800 }) });
+  R('blueprint',    { desc: 'Technical blueprint grid, mono caption, typed feel', font: "ui-monospace,'Cascadia Code',Menlo,Consolas", bg: 'blueprint', key: 'highlight', transition: 'wipe',
+    colors: { bg1: '#0b3a8f', bg2: '#0a2a6b', dot: '#ffffff1f', accent: '#fde047', fg: '#ffffff', keyFg: '#0a2a6b', card: '#0e47b0', cardFg: '#ffffff' }, caption: cap({ weight: 700, size: 78, sizeVis: 66, ls: '0' }) });
+  R('chat-pop',     { desc: 'Pastel candy with big chat bubbles', font: 'Inter', bg: 'gradient', key: 'highlight', transition: 'zoom',
+    colors: { bg1: '#fde68a', bg2: '#fbcfe8', accent: '#ec4899', fg: '#3b0764', keyFg: '#ffffff', card: '#ffffff', cardFg: '#1f2937' }, caption: cap({ weight: 900 }) });
+  R('presenter-night', { desc: 'Animated presenter (free, lip-synced) over a mesh glow', font: 'Inter', bg: 'mesh', key: 'highlight', transition: 'wipe', grain: 0.06, avatar: { character: 'founder' },
+    colors: { bg1: '#080818', bg2: '#3730a3', accent: '#818cf8', accent2: '#c084fc', ribbon1: '#38bdf8', fg: '#ffffff', keyFg: '#0b0b24', card: '#14142b', cardFg: '#f1f5f9' }, caption: cap({}) });
+  R('presenter-day',   { desc: 'Animated presenter on a bright ribbon', font: 'Inter', bg: 'ribbon', key: 'highlight', transition: 'zoom', avatar: { character: 'founder' },
+    colors: { bg1: '#f8fafc', bg2: '#c7d2fe', ribbon1: '#a78bfa', ribbon2: '#fdba74', accent: '#4f46e5', fg: '#0f172a', keyFg: '#ffffff', card: '#ffffff', cardFg: '#0f172a' }, caption: cap({}) });
+  R('presenter-bot',   { extends: 'presenter-night', desc: 'Robot presenter, terminal vibes', bg: 'grid', avatar: { character: 'robot' }, colors: { bg1: '#04110a', bg2: '#06240f', dot: '#22c55e18', accent: '#22d3ee', fg: '#e6fffa', keyFg: '#04110a', card: '#0a1f14', cardFg: '#e6fffa' } });
+  R('presenter-blob',  { extends: 'presenter-day', desc: 'Friendly blob mascot presenter', bg: 'gradient', avatar: { character: 'blob' }, colors: { bg1: '#ffedd5', bg2: '#fecdd3', accent: '#ea580c', fg: '#431407', keyFg: '#ffffff' } });
+  // transitions for the originals
+  ['aurora-dark', 'aurora-light'].forEach(n => (window.RK.styles[n].transition = 'zoom'));
+  ['orbit-dark', 'orbit-light', 'mint-ledger', 'mint-ledger-dark', 'clean-white', 'clean-black'].forEach(n => { window.RK.styles[n].transition = 'flash'; });
+  window.RK.styles['vhs'].transition = 'glitch'; window.RK.styles['volt'].transition = 'flash'; window.RK.styles['newsroom'].transition = 'wipe';
 })();

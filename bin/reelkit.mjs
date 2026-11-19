@@ -14,7 +14,7 @@ import { browserAvailable, findBrowser, launch } from '../src/browser.mjs';
 import { summary, snapshotDue, calibrate } from '../src/analytics.mjs';
 import * as swipe from '../src/swipe.mjs';
 import { repurpose, branch } from '../src/repurpose.mjs';
-import { cutFootage, burnCaptions } from '../src/footage.mjs';
+import { cutFootage } from '../src/footage.mjs';
 import { makeAvatar, listAvatars } from '../src/heygen.mjs';
 import { startWorker, enqueueDue, tick, listJobs } from '../src/jobs.mjs';
 
@@ -82,10 +82,7 @@ try {
       } else { console.log('(motion renderer unavailable, using basic ffmpeg renderer)'); r = await renderBasic({ beats: sc.beats, style: 'saas-dark', voice: flags.voice || 'auto', music: flags.music, out }); }
       Object.assign(m, { status: ['posted', 'scheduled'].includes(m.status) ? m.status : 'rendered', durations: r.durations, seconds: r.seconds, style, lang, rendered: new Date().toISOString() }); saveMeta(s, m);
       console.log(`\n✔ ${out}  (${r.seconds}s, voice: ${r.provider})`); break; }
-    case 'footage': {
-      if (!pos[0]) throw new Error('usage: footage <video> [--out f] [--captions]'); const out = flags.out || pos[0].replace(/\.[^.]+$/, '') + '.cut.mp4';
-      const r = cutFootage({ input: pos[0], out, lang: flags.lang || 'en' }); console.log(`cut ${r.before}s -> ${r.after}s (${r.segments} segments)`);
-      if (flags.captions) { if (!r.words) throw new Error('captions need a transcript: pip install faster-whisper'); const o2 = out.replace('.mp4', '.captioned.mp4'); burnCaptions({ input: out, words: r.words, out: o2 }); console.log('✔ ' + o2); } else console.log('✔ ' + out); break; }
+    case 'footage': throw new Error('footage is being rebuilt');
     case 'carousel': case 'repurpose': { const r = await repurpose(need(pos[0]), { style: flags.style }); console.log(r.files.join('\n') + '\nBrief for Claude: ' + r.brief); break; }
     case 'hooks': { const m = getMeta(need(pos[0])); if (flags.add) { m.hooks = [...(m.hooks || []), String(flags.add)]; saveMeta(pos[0], m); } console.log((m.hooks || []).map((h, i) => `${i + 1}. ${h}`).join('\n') || 'none'); break; }
     case 'swipe': {

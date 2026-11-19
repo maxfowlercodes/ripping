@@ -1,7 +1,7 @@
 // Visual directives at the end of a script line:  Some words. {counter: 9851 | paying users | +64%}
 // Mark key words with *asterisks*.
 const num = s => Number(String(s).replace(/[, ]/g, ''));
-export const DIRECTIVES = ['counter', 'chart', 'bars', 'tier', 'code', 'list', 'big', 'image', 'screen', 'none'];
+export const DIRECTIVES = ['counter', 'chart', 'bars', 'tier', 'code', 'list', 'big', 'image', 'screen', 'none', 'chat', 'notify', 'donut', 'compare', 'timeline', 'browser', 'quote', 'price', 'stats'];
 
 export function splitDirective(line) {
   const m = line.match(/^(.*?)\s*\{\s*(\w+)\s*(?::\s*([^}]*))?\}\s*$/);
@@ -28,6 +28,15 @@ export function parseVisual(type, arg) {
     case 'big': return { type, text: arg };
     case 'image': return { type, src: arg };
     case 'screen': return { type, url: arg };
+    case 'browser': return { type, url: arg };
+    case 'chat': return { type, msgs: arg.split(';').map(x => { const m = x.match(/^\s*(me|them)\s*:\s*(.*)$/i); return m ? { who: m[1].toLowerCase(), text: m[2].trim() } : { who: 'them', text: x.trim() }; }).filter(m => m.text) };
+    case 'notify': return { type, items: arg.split(';').map(x => { const [app, ...r] = x.split(':'); return { app: (app || 'App').trim(), text: r.join(':').trim() }; }).filter(i => i.text) };
+    case 'donut': return { type, value: num(parts[0]), label: parts[1] || '', sub: parts[2] || '' };
+    case 'compare': { const sd = s => { const [label, ...r] = s.split(':'); const rest = r.join(':').trim(); const m = rest.match(/^(\S+)\s*(.*)$/); return { label: label.trim(), big: m ? m[1] : rest, text: m ? m[2] : '' }; }; return { type, left: sd(parts[0] || ''), right: sd(parts[1] || '') }; }
+    case 'timeline': return { type, items: arg.split(';').map(x => { const [when, ...r] = x.split(':'); return { when: when.trim(), what: r.join(':').trim() }; }).filter(i => i.what) };
+    case 'quote': return { type, text: parts[0], who: parts[1] || '' };
+    case 'price': return { type, price: parts[0], per: parts[1] || '', was: parts[2] || '', badge: parts[3] || '' };
+    case 'stats': return { type, items: arg.split(';').map(x => { const m = x.trim().match(/^(\S+)\s+(.*)$/); return m ? { value: m[1], label: m[2] } : { value: x.trim(), label: '' }; }).filter(i => i.value) };
   }
   return null;
 }

@@ -2,11 +2,12 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 import { launch, rootDir } from './browser.mjs';
 import { run, ensureDir, probeDuration, home } from './util.mjs';
 import { synth, detectProvider, RTL } from './voice.mjs';
+import { transcribe, alignTokens, whisperAvailable } from './transcribe.mjs';
 
 const sha = x => crypto.createHash('sha1').update(typeof x === 'string' ? x : JSON.stringify(x)).digest('hex').slice(0, 14);
 export const customStyleFiles = () => {
@@ -14,6 +15,16 @@ export const customStyleFiles = () => {
   return dirs.flatMap(d => (fs.existsSync(d) ? fs.readdirSync(d).filter(f => f.endsWith('.js')).map(f => path.join(d, f)) : []));
 };
 const engineHash = () => sha(['runtime.js', 'widgets.js', 'styles.js'].map(f => fs.readFileSync(path.join(rootDir, 'render', f), 'utf8')).join() + customStyleFiles().map(f => fs.readFileSync(f, 'utf8')).join());
+
+/** Per-frame loudness (0..1) of an audio file: drives avatar lip-sync. */
+export function audioEnvelope(file, fps) {
+  const r = spawnSync('ffmpeg', ['-v', 'error', '-i', file, '-f', 'f32le', '-ac', '1', '-ar', '8000', '-'], { maxBuffer: 1 << 28 });
+  if (r.status !== 0 || !r.stdout?.length) return null;
+  const buf = r.stdout; const n = buf.length / 4, per = Math.floor(8000 / fps), frames = Math.floor(n / per); const rms = new Float32Array(frames);
+  for (let f = 0; f < frames; f++) { let sum = 0; for (let i = 0; i < per; i++) { const v = buf.readFloatLE((f * per + i) * 4); sum += v * v; } rms[f] = Math.sqrt(sum / per); }
+  const sorted = [...rms].sort((a, b) => a - b); const p95 = sorted[Math.floor(sorted.length * 0.95)] || 1e-6; const gate = p95 * 0.06;
+  return { fps, data: [...rms].map(v => (v < gate ? 0 : Math.min(1, Math.pow(v / p95, 0.7)))).map(v => +v.toFixed(3)) };
+}
 
 export function tokenize(text, lang) {
   if (['ja', 'zh', 'th'].includes(lang) && typeof Intl?.Segmenter === 'function') return [...new Intl.Segmenter(lang, { granularity: 'word' }).segment(text)].filter(s => s.isWordLike || /\S/.test(s.segment)).map(s => s.segment);
@@ -45,9 +56,10 @@ function encodeSegment(frames, fps, out) {
   });
 }
 
-export async function renderReel2({ script, style, voice = 'auto', lang = 'en', music, out, fps = 30, draft = false, avatarFile, workDir, onLog = console.log, onProgress = () => {} }) {
+export async function renderReel2({ script, style, voice = 'auto', lang = 'en', music, out, fps = 30, draft = false, avatarFile, avatar, brandColors, sync, workDir, onLog = console.log, onProgress = () => {} }) {
   ensureDir(workDir);
   const provider = detectProvider(voice);
+  const syncWhisper = sync !== false && whisperAvailable();
   const beatsText = script.beats; const n = beatsText.length;
   onLog(`style=${style} voice=${provider} lang=${lang}${draft ? ' (draft)' : ''}`);
 
@@ -61,7 +73,15 @@ export async function renderReel2({ script, style, voice = 'auto', lang = 'en', 
       const key = sha([text, provider, lang, process.env.ELEVENLABS_VOICE_ID || '']);
       const cached = fs.readdirSync(workDir).find(f => f.startsWith('a_' + key));
       if (cached) { file = path.join(workDir, cached); seconds = probeDuration(file); const wj = path.join(workDir, 'a_' + key + '.json'); if (fs.existsSync(wj)) words = JSON.parse(fs.readFileSync(wj, 'utf8')); }
-      else { const v = await synth(text, path.join(workDir, 'a_' + key), provider, { lang }); file = v.file; seconds = v.seconds; words = v.words; if (words) fs.writeFileSync(path.join(workDir, 'a_' + key + '.json'), JSON.stringify(words)); }
+      else {
+        const v = await synth(text, path.join(workDir, 'a_' + key), provider, { lang }); file = v.file; seconds = v.seconds; words = v.words;
+        // exact caption timing for any voice: align the script to Whisper's word timestamps (falls back to estimates)
+        if (!words && file && syncWhisper) {
+          const tr = transcribe(file, { lang, model: process.env.REELKIT_SYNC_MODEL || (lang === 'en' ? 'tiny.en' : 'base'), verbatim: false });
+          const al = tr.words ? alignTokens(tokenize(text, lang), tr.words) : null; if (al) words = al.map((a, k) => ({ t: tokenize(text, lang)[k], s: a.s, e: a.e }));
+        }
+        if (words) fs.writeFileSync(path.join(workDir, 'a_' + key + '.json'), JSON.stringify(words));
+      }
     }
     beatInfo.push({ text, file, seconds, words });
     onProgress({ stage: 'voice', done: i + 1, total: n });
@@ -87,23 +107,38 @@ export async function renderReel2({ script, style, voice = 'auto', lang = 'en', 
   });
   const total = t0;
 
+  // ---- audio track first (lip-sync needs its envelope)
+  const aud = path.join(workDir, 'audio.m4a'); let r;
+  if (avatarFile) r = run('ffmpeg', ['-y', '-i', avatarFile, '-vn', '-t', String(total), '-c:a', 'aac', aud]);
+  else {
+    const args = ['-y']; let fc = '';
+    beatInfo.forEach((b, i) => { const d = (specBeats[i].end - specBeats[i].start).toFixed(3);
+      if (b.file) args.push('-i', b.file); else args.push('-f', 'lavfi', '-t', d, '-i', 'anullsrc=r=44100:cl=mono');
+      fc += `[${i}:a]aresample=44100,aformat=channel_layouts=mono,apad=whole_dur=${d},atrim=0:${d}[a${i}];`; });
+    fc += beatInfo.map((_, i) => `[a${i}]`).join('') + `concat=n=${n}:v=0:a=1[a]`;
+    r = run('ffmpeg', [...args, '-filter_complex', fc, '-map', '[a]', '-c:a', 'aac', '-b:a', '160k', aud]);
+  }
+  if (!r.ok) throw new Error('audio failed: ' + r.err.slice(-400));
+  const envelope = audioEnvelope(aud, fps);
+
   // ---- 2. browser
   const browser = await launch();
   try {
     // resolve image/screen visuals to absolute file URLs
     for (let i = 0; i < specBeats.length; i++) {
       const v = specBeats[i].visual; if (!v) continue;
-      if (v.type === 'screen') { const f = path.join(workDir, 'screen_' + sha(v.url) + '.png'); if (!fs.existsSync(f)) { onLog('  capturing ' + v.url); await grabScreen(browser, v.url, f); } specBeats[i].visual = { type: 'image', src: pathToFileURL(f).href }; }
+      if (v.type === 'screen' || v.type === 'browser') { const f = path.join(workDir, 'screen_' + sha(v.url) + '.png'); if (!fs.existsSync(f)) { onLog('  capturing ' + v.url); await grabScreen(browser, v.url, f); } specBeats[i].visual = v.type === 'browser' ? { type: 'browser', url: v.url, src: pathToFileURL(f).href } : { type: 'image', src: pathToFileURL(f).href }; }
       else if (v.type === 'image' && !/^(file|https?|data):/.test(v.src)) specBeats[i].visual = { type: 'image', src: pathToFileURL(path.resolve(v.src)).href };
     }
     const k = draft ? 0.5 : 1;
     const { ctx, page } = await openStage(browser, k);
-    const spec = { style, beats: specBeats, total, rtl: RTL.has(lang), lang };
+    const builtin = avatar && !String(avatar).startsWith('heygen') ? { character: String(avatar).replace(/^builtin:/, '') } : undefined;
+    const spec = { style, beats: specBeats, total, rtl: RTL.has(lang), lang, envelope, avatar: builtin, colors: brandColors || undefined };
     await page.evaluate(s => RK.setup(s), spec);
 
     const eh = engineHash(); const segs = [];
     for (let i = 0; i < n; i++) {
-      const b = specBeats[i]; const key = sha([b, style, fps, draft, eh, total]);
+      const b = specBeats[i]; const env = envelope ? sha(envelope.data.slice(Math.floor(b.start * fps), Math.ceil(b.end * fps))) : ''; const key = sha([b, style, fps, draft, eh, total, env, spec.avatar, brandColors]);
       const seg = path.join(workDir, `seg_${String(i).padStart(3, '0')}_${key}.mp4`);
       segs.push(seg);
       if (fs.existsSync(seg)) { onLog(`  beat ${i + 1}/${n} cached`); onProgress({ stage: 'render', done: i + 1, total: n }); continue; }
@@ -119,21 +154,8 @@ export async function renderReel2({ script, style, voice = 'auto', lang = 'en', 
 
     // ---- 3. concat video
     const list = path.join(workDir, 'list.txt'); fs.writeFileSync(list, segs.map(s => `file '${s.replace(/\\/g, '/').replace(/'/g, "'\\''")}'`).join('\n'));
-    const vcat = path.join(workDir, 'video.mp4'); let r = run('ffmpeg', ['-y', '-f', 'concat', '-safe', '0', '-i', list, '-c', 'copy', vcat]);
+    const vcat = path.join(workDir, 'video.mp4'); r = run('ffmpeg', ['-y', '-f', 'concat', '-safe', '0', '-i', list, '-c', 'copy', vcat]);
     if (!r.ok) throw new Error('concat failed: ' + r.err.slice(-400));
-
-    // ---- 4. audio track
-    const aud = path.join(workDir, 'audio.m4a');
-    if (avatarFile) r = run('ffmpeg', ['-y', '-i', avatarFile, '-vn', '-t', String(total), '-c:a', 'aac', aud]);
-    else {
-      const args = ['-y']; let fc = '';
-      beatInfo.forEach((b, i) => { const d = (specBeats[i].end - specBeats[i].start).toFixed(3);
-        if (b.file) args.push('-i', b.file); else args.push('-f', 'lavfi', '-t', d, '-i', 'anullsrc=r=44100:cl=mono');
-        fc += `[${i}:a]aresample=44100,aformat=channel_layouts=mono,apad=whole_dur=${d},atrim=0:${d}[a${i}];`; });
-      fc += beatInfo.map((_, i) => `[a${i}]`).join('') + `concat=n=${n}:v=0:a=1[a]`;
-      r = run('ffmpeg', [...args, '-filter_complex', fc, '-map', '[a]', '-c:a', 'aac', '-b:a', '160k', aud]);
-    }
-    if (!r.ok) throw new Error('audio failed: ' + r.err.slice(-400));
 
     // ---- 5. mux (+music, +avatar overlay)
     ensureDir(path.dirname(out));
