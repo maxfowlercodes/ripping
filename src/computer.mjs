@@ -5,6 +5,7 @@ import fs from 'node:fs';
 import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
+import { openPage, prepareDeterministic, shareDeterministic } from './igflow.mjs';
 import { spawn } from 'node:child_process';
 import { findBrowser, rootDir } from './browser.mjs';
 import { home, ensureDir } from './util.mjs';
@@ -66,6 +67,9 @@ export async function attachFile(file, port = CDP_PORT) {
 /** Phase A: open the composer, hand over the video, add the caption, advance to the final Share screen, then STOP. */
 export async function prepareReelPost({ file, caption, trial = false, log }) {
   await ensureBrowser();
+  // First choice: Reelkit drives the composer itself (fast, free, no waiting for "stable" elements). Claude is the fallback.
+  try { const pg = await openPage(CDP_PORT, { gotoUrl: IG_URL() + '/' }); try { const r = await prepareDeterministic(pg, { file: path.resolve(file), caption, trial, log }); if (r.status === 'ready' || r.status === 'login_required') return r; } finally { pg.close(); } }
+  catch (e) { log?.('Reelkit could not do the composer itself (' + e.message + '). Asking Claude to do it.'); }
   const tail = `4. Click Next through the crop/trim step and the edit step (accept defaults; if asked "Video posts are now shared as reels" click OK).
 5. In the caption box type exactly this caption (keep line breaks):
 ${caption}
@@ -89,6 +93,7 @@ Reply JSON {status:"ready"} when that screen is showing, {status:"login_required
 /** Phase B: click Share and confirm. */
 export async function sharePost({ log }) {
   await ensureBrowser();
+  try { const pg = await openPage(CDP_PORT); try { const r = await shareDeterministic(pg, { log }); if (r.status === 'posted' || r.note) return r; } finally { pg.close(); } } catch (e) { log?.('Reelkit could not click Share itself (' + e.message + '). Asking Claude.'); }
   const prompt = `The Instagram "New reel" dialog is open on its final screen. Click "Share", wait until you see "Your reel has been shared" (or the dialog closes with a success message), then reply JSON {status:"posted", url:"<permalink if visible>"} or {status:"error", note}. Do nothing else.`;
   const r = await askClaude({ task: 'computer_post', prompt, system: SAFETY(), schema: postSchema, mcpConfig: mcpConfig(), allowedTools: ALLOWED, timeoutMs: 300000, force: true, maxTurns: 14, log });
   return r.output;

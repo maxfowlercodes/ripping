@@ -190,3 +190,17 @@ test('claude token validates, igStatus remembers a login while the browser is cl
   const { writeJson, home } = await import('../src/util.mjs'); const path = await import('node:path'); writeJson(path.join(home(), 'ig-link.json'), { expires: Math.floor(Date.now() / 1000) + 86400 * 90, at: Date.now() });
   const { igStatus } = await import('../src/setup.mjs'); const s = await igStatus(); assert.equal(s.browser, false); assert.equal(s.loggedIn, true); assert.equal(s.remembered, true);
 });
+
+test('composer flow works on an animated fake Instagram page (open, attach, next, caption, share)', async () => {
+  const { loadPlaywright, findBrowser } = await import('../src/browser.mjs'); const pw = loadPlaywright(); if (!pw || !findBrowser()) return;
+  const { openPage, prepareDeterministic, shareDeterministic } = await import('../src/igflow.mjs'); const path = await import('node:path'); const { pathToFileURL, fileURLToPath } = await import('node:url'); const fs = await import('node:fs'); const os = await import('node:os');
+  const port = 9400 + Math.floor(Math.random() * 400); const b = await pw.chromium.launch({ executablePath: findBrowser(), args: ['--no-sandbox', `--remote-debugging-port=${port}`] });
+  try {
+    const p = await b.newPage(); await p.goto(pathToFileURL(path.join(path.dirname(fileURLToPath(import.meta.url)), 'fixtures', 'fake-instagram.html')).href);
+    const vid = path.join(os.tmpdir(), 'rk-fake.mp4'); fs.writeFileSync(vid, 'x');
+    const pg = await openPage(port, { urlMatch: /fake-instagram/ });
+    const r = await prepareDeterministic(pg, { file: vid, caption: 'Hello caption\nsecond line', trial: false }); assert.equal(r.status, 'ready');
+    assert.match(await pg.ev(`document.querySelector('[aria-label^="Write a caption"]').innerText`), /Hello caption/);
+    assert.equal((await shareDeterministic(pg)).status, 'posted'); pg.close();
+  } finally { await b.close(); }
+});
