@@ -183,3 +183,10 @@ test('layout QA samples every 2s plus each beat, and no presenter by default', a
   const { getBrand, saveBrand } = await import('../src/brand.mjs'); assert.notEqual(getBrand().production.avatar, 'founder');
   saveBrand({ production: { avatar: 'founder' } }); assert.equal(getBrand().production.avatar, 'founder'); // an explicit choice after migration sticks
 });
+
+test('claude token validates, igStatus remembers a login while the browser is closed', async () => {
+  const { setClaudeToken, getClaudeToken } = await import('../src/claude.mjs'); assert.throws(() => setClaudeToken('nope'), /sk-ant/);
+  setClaudeToken('sk-ant-oat01-' + 'a'.repeat(30)); assert.ok(getClaudeToken().startsWith('sk-ant-')); setClaudeToken(null); assert.equal(getClaudeToken(), null);
+  const { writeJson, home } = await import('../src/util.mjs'); const path = await import('node:path'); writeJson(path.join(home(), 'ig-link.json'), { expires: Math.floor(Date.now() / 1000) + 86400 * 90, at: Date.now() });
+  const { igStatus } = await import('../src/setup.mjs'); const s = await igStatus(); assert.equal(s.browser, false); assert.equal(s.loggedIn, true); assert.equal(s.remembered, true);
+});

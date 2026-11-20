@@ -10,7 +10,7 @@ import { refreshProbes } from './probes.mjs';
 import { findBrowser, loadPlaywright, rootDir } from './browser.mjs';
 import { whisperAvailable } from './transcribe.mjs';
 import { kokoroAvailable, piperAvailable, piperModelFor, installKokoro, installPiperVoice } from './voice.mjs';
-import { getSettings } from './claude.mjs';
+import { getSettings, claudeEnv } from './claude.mjs';
 import { CDP_PORT } from './computer.mjs';
 
 const PY = PYTHON;
@@ -18,7 +18,7 @@ const PY = PYTHON;
 export function claudeStatus() {
   if (probe.on) return probe.map.get('claude:status') || { installed: false, loggedIn: false, pending: true };
   const rc = resolveClaude(getSettings().claudeBin); if (!rc.found) return { installed: false, loggedIn: false };
-  const r = run(rc.cmd, [...rc.pre, 'auth', 'status']); try { const j = JSON.parse(r.out); return { installed: true, loggedIn: !!j.loggedIn, method: j.authMethod }; } catch { return { installed: true, loggedIn: false, unknown: true }; }
+  const r = run(rc.cmd, [...rc.pre, 'auth', 'status'], { env: { ...process.env, ...claudeEnv() } }); try { const j = JSON.parse(r.out); return { installed: true, loggedIn: !!j.loggedIn, method: j.authMethod }; } catch { return { installed: true, loggedIn: false, unknown: true }; }
 }
 
 const portOpen = port => new Promise(res => { const s = net.connect(port, '127.0.0.1'); s.on('connect', () => { s.destroy(); res(true); }); s.on('error', () => res(false)); setTimeout(() => { s.destroy(); res(false); }, 700); });
@@ -47,12 +47,16 @@ export async function browserShot(port = CDP_PORT) {
     ws.onerror = () => { clearTimeout(to); reject(new Error('devtools connection failed')); };
   });
 }
-/** Is the dedicated Reelkit browser running, and is it logged in to Instagram? (session cookie only; no page content is read) */
+const igFile = () => path.join(home(), 'ig-link.json');
+const rememberIg = v => { try { if (v) { const cur = readJson(igFile(), null); if (!cur || cur.expires !== v.expires || Date.now() - cur.at > 6 * 3600e3) writeJson(igFile(), { ...v, at: Date.now() }); } else fs.rmSync(igFile(), { force: true }); } catch {} };
+/** Is the dedicated Reelkit browser running, and is it logged in to Instagram? (session cookie only; no page content is read)
+ *  The login itself lives in the browser profile on disk, so it survives closing the browser and updating Reelkit. When the browser is closed
+ *  we report what we last saw (and when that login expires) instead of pretending you are logged out. */
 export async function igStatus(host = (process.env.REELKIT_IG_URL || 'https://www.instagram.com')) {
-  if (!(await portOpen(CDP_PORT))) return { browser: false, loggedIn: false };
+  if (!(await portOpen(CDP_PORT))) { const k = readJson(igFile(), null); const exp = k?.expires > 0 ? k.expires * 1000 : k ? Date.now() + 864e5 : 0; return k && exp > Date.now() ? { browser: false, loggedIn: true, remembered: true, until: new Date(exp).toISOString() } : { browser: false, loggedIn: false }; }
   try {
     const cookies = await browserCookies(); if (cookies === null) return { browser: true, loggedIn: null, note: 'needs Node 22+ for automatic detection' };
-    const h = new URL(host).hostname; return { browser: true, loggedIn: cookies.some(c => c.name === 'sessionid' && c.value && h.endsWith(c.domain.replace(/^\./, ''))) };
+    const h = new URL(host).hostname; const sc = cookies.find(c => c.name === 'sessionid' && c.value && h.endsWith(c.domain.replace(/^\./, ''))); rememberIg(sc ? { expires: sc.expires } : null); return { browser: true, loggedIn: !!sc, until: sc?.expires > 0 ? new Date(sc.expires * 1000).toISOString() : undefined };
   } catch (e) { return { browser: true, loggedIn: false, error: e.message }; }
 }
 
@@ -107,6 +111,13 @@ export async function runInstaller(id, log = () => {}) {
 }
 
 /** Open a terminal running `claude` so the user can sign in (fixed command). */
+export function openClaudeSetupToken() {
+  const rc = resolveClaude(getSettings().claudeBin); const cmd = rc.found ? [rc.cmd, ...rc.pre] : ['claude']; const line = cmd.map(x => (/\s/.test(x) ? `"${x}"` : x)).join(' ') + ' setup-token';
+  if (isWin) spawn('cmd.exe', ['/c', 'start', 'Claude long sign-in', 'cmd', '/k', line], { detached: true, stdio: 'ignore' }).unref();
+  else if (isMac) spawn('osascript', ['-e', `tell application "Terminal" to do script "${line}"`, '-e', 'tell application "Terminal" to activate'], { detached: true, stdio: 'ignore' }).unref();
+  else for (const t of [['x-terminal-emulator', ['-e', line]], ['gnome-terminal', ['--', 'sh', '-c', line]], ['konsole', ['-e', line]]]) if (has(t[0])) { spawn(t[0], t[1], { detached: true, stdio: 'ignore' }).unref(); return true; }
+  return true;
+}
 export function openClaudeLogin() {
   const rc = resolveClaude(getSettings().claudeBin); const cmd = rc.found ? [rc.cmd, ...rc.pre] : ['claude']; const line = cmd.map(x => (/\s/.test(x) ? `"${x}"` : x)).join(' ') + ' auth login';
   if (isWin) spawn('cmd.exe', ['/c', 'start', 'Claude sign-in', 'cmd', '/k', line], { detached: true, stdio: 'ignore', windowsVerbatimArguments: false }).unref();

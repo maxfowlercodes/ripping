@@ -20,7 +20,7 @@ import { styleList } from './render2.mjs';
 import { has, findFont, home, ensureDir, writeJson, readJson } from './util.mjs';
 import { spawn } from 'node:child_process';
 import { getBrand, saveBrand, missingBrand } from './brand.mjs';
-import { getSettings, saveSettings, usageToday, reelkitWindows, TASKS, modelFor, askClaude, claudeAvailable, CODE_ONLY, MODELS } from './claude.mjs';
+import { getSettings, saveSettings, usageToday, reelkitWindows, getClaudeToken, setClaudeToken, TASKS, modelFor, askClaude, claudeAvailable, CODE_ONLY, MODELS } from './claude.mjs';
 import { listInbox, resolveItem, getItem, addInbox } from './inbox.mjs';
 import { startRun, answerGate, listRuns, getRun, cancelRun } from './autopilot.mjs';
 import { listIdeas, setIdea, generateIdeas, referenceCount } from './ideas.mjs';
@@ -28,7 +28,7 @@ import { addFromText } from './swipe.mjs';
 import { ensureBrowser } from './computer.mjs';
 import { getLeads, leadsCsv, statusFile } from './chat.mjs';
 import { loadCatalog } from './stylecatalog.mjs';
-import { systemCheck, INSTALLERS, openClaudeLogin, igStatus, browserShot, getOnboarding, setOnboarding, getAutofill, getBrowserTest } from './setup.mjs';
+import { systemCheck, INSTALLERS, openClaudeLogin, openClaudeSetupToken, igStatus, browserShot, getOnboarding, setOnboarding, getAutofill, getBrowserTest } from './setup.mjs';
 import { getResearch } from './research.mjs';
 import { storageReport, cleanStorage, freeBytes } from './storage.mjs';
 import { voiceCatalog, synth } from './voice.mjs';
@@ -160,8 +160,13 @@ export function startDashboard({ port = 4177, lan = false, worker = true, open =
       if (p === '/api/brand') { if (req.method === 'POST') saveBrand(body); return send(res, 200, { brand: getBrand(), missing: missingBrand() }); }
       if (p === '/api/claude') {
         if (req.method === 'POST') { const patch = {}; if (body.mode) patch.mode = body.mode; if (body.routing) patch.routing = body.routing; if (body.budget) patch.budget = { ...getSettings().budget, ...body.budget }; saveSettings(patch); }
-        const st = getSettings(); return send(res, 200, { settings: st, tasks: Object.entries(TASKS).map(([k, t]) => ({ id: k, desc: t.desc, computer: !!t.computer, model: modelFor(k, st), overridden: !!st.routing?.[k] })), usage: usageToday(), codeOnly: CODE_ONLY, models: MODELS, available: claudeAvailable() });
+        const st = getSettings(); return send(res, 200, { settings: st, tasks: Object.entries(TASKS).map(([k, t]) => ({ id: k, desc: t.desc, computer: !!t.computer, model: modelFor(k, st), overridden: !!st.routing?.[k] })), usage: usageToday(), codeOnly: CODE_ONLY, models: MODELS, available: claudeAvailable(), tokenSet: !!getClaudeToken() });
       }
+      if (p === '/api/claude/token' && req.method === 'POST') {
+        const had = getClaudeToken(); try { setClaudeToken(String(body.token || '').trim()); await askClaude({ task: 'usage_probe', prompt: 'Reply with the single word ok', force: true }); return send(res, 200, { ok: true }); }
+        catch (e) { try { setClaudeToken(had); } catch {} return send(res, 400, { error: /sk-ant/.test(e.message) ? e.message : 'Claude did not accept that token: ' + e.message.slice(0, 160) }); } }
+      if (p === '/api/claude/token/clear' && req.method === 'POST') { setClaudeToken(null); return send(res, 200, { ok: true }); }
+      if (p === '/api/claude/token/open' && req.method === 'POST') { openClaudeSetupToken(); return send(res, 200, { ok: true }); }
       if (p === '/api/usage') return send(res, 200, reelkitWindows());
       if (p === '/api/usage/refresh' && req.method === 'POST') { try { await askClaude({ task: 'usage_probe', prompt: 'Reply with the single word ok', force: true }); } catch (e) { return send(res, 200, { ...reelkitWindows(), error: e.message }); } return send(res, 200, reelkitWindows()); }
       if (p === '/api/claude/test' && req.method === 'POST') { const r = await askClaude({ task: 'caption_hashtags', prompt: 'Reply JSON {"caption":"ok","hashtags":["#a"]}', schema: { type: 'object', properties: { caption: { type: 'string' }, hashtags: { type: 'array', items: { type: 'string' } } }, required: ['caption', 'hashtags'] }, force: true }); return send(res, 200, { ok: true, model: r.model, usage: r.usage }); }

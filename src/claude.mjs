@@ -56,6 +56,18 @@ export function modelFor(task, settings = getSettings()) {
 const ledgerPath = () => path.join(home(), 'usage.jsonl');
 export const readLedger = () => (fs.existsSync(ledgerPath()) ? fs.readFileSync(ledgerPath(), 'utf8').split('\n').filter(Boolean).map(l => { try { return JSON.parse(l); } catch { return null; } }).filter(Boolean) : []);
 const logUse = e => { ensureDir(home()); fs.appendFileSync(ledgerPath(), JSON.stringify(e) + '\n'); };
+const tokenPath = () => path.join(home(), 'claude-token.txt');
+/** Long-lived sign-in (from "claude setup-token", valid for a year). When set, every call uses it, so no login can expire or race. */
+export const getClaudeToken = () => { try { return fs.readFileSync(tokenPath(), 'utf8').trim() || null; } catch { return null; } };
+export function setClaudeToken(t) { if (!t) { fs.rmSync(tokenPath(), { force: true }); return; } if (!/^sk-ant-[\w-]{20,}$/.test(t)) throw new Error('That does not look like a Claude token. It starts with sk-ant-'); fs.writeFileSync(tokenPath(), t, { mode: 0o600 }); }
+export const claudeEnv = () => { const t = getClaudeToken(); return t ? { CLAUDE_CODE_OAUTH_TOKEN: t } : {}; };
+/** Starting several Claude processes at once can make them refresh the same login at the same moment and invalidate it ("session expired").
+ *  Starts are therefore single-file across the app and its worker: the lock is held only until the process has started talking. */
+async function startLock() {
+  if (getClaudeToken()) return () => {}; const d = path.join(home(), 'claude-start.lock'); const t0 = Date.now();
+  for (;;) { try { fs.mkdirSync(d); break; } catch (e) { if (e.code !== 'EEXIST') return () => {}; try { if (Date.now() - fs.statSync(d).mtimeMs > 30000) fs.rmSync(d, { recursive: true, force: true }); } catch {} if (Date.now() - t0 > 60000) return () => {}; await new Promise(r => setTimeout(r, 150)); } }
+  let released = false; const timer = setTimeout(() => rel(), 20000); const rel = () => { if (released) return; released = true; clearTimeout(timer); try { fs.rmSync(d, { recursive: true, force: true }); } catch {} }; return rel;
+}
 const limitsPath = () => path.join(home(), 'limits.json');
 export const getLimits = () => readJson(limitsPath(), null);
 /** Claude Code reports your real plan usage (5-hour session and weekly, as shown in the Claude app) on every call as a rate_limit_event. */
@@ -99,17 +111,18 @@ export function buildArgs({ task, prompt, system, schema, model, effort, maxTurn
   return a;
 }
 
-function runCli(args, { cwd, bin, timeoutMs, stream, onEvent, stallMs }) {
+async function runCli(args, { cwd, bin, timeoutMs, stream, onEvent, stallMs }) {
+  const release = await startLock();
   return new Promise((resolve, reject) => {
     const rc = resolveClaude(bin === 'claude' ? undefined : bin); // finds claude.exe / the npm package behind claude.cmd on Windows
-    const env = { ...process.env, MCP_TIMEOUT: process.env.MCP_TIMEOUT || '90000', MCP_TOOL_TIMEOUT: process.env.MCP_TOOL_TIMEOUT || '120000' }; // give the browser component time to start
+    const env = { ...process.env, ...claudeEnv(), MCP_TIMEOUT: process.env.MCP_TIMEOUT || '90000', MCP_TOOL_TIMEOUT: process.env.MCP_TOOL_TIMEOUT || '120000' }; // give the browser component time to start
     const p = spawn(rc.cmd, [...rc.pre, ...args], { cwd, env, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true }); let out = '', err = '', buf = '', final = null, done = false, last = Date.now();
-    const finish = fn => { if (done) return; done = true; clearTimeout(to); clearInterval(wd); fn(); };
+    const finish = fn => { if (done) return; done = true; release(); clearTimeout(to); clearInterval(wd); fn(); };
     const abort = msg => finish(() => { try { p.kill(); } catch {} reject(new Error(msg)); });
     const to = setTimeout(() => abort('Claude timed out'), timeoutMs);
     const wd = setInterval(() => { if (isCancelled()) return abort('Cancelled'); if (stallMs && Date.now() - last > stallMs) abort(`Claude stopped responding for ${Math.round(stallMs / 1000)} seconds, so Reelkit stopped it. Try again; if it repeats, run "node bin/reelkit.mjs browser-test" to see why.`); }, 1000);
     p.stdout.on('data', d => { last = Date.now(); if (!stream) { out += d; return; }
-      buf += d; let i; while ((i = buf.indexOf('\n')) >= 0) { const line = buf.slice(0, i).trim(); buf = buf.slice(i + 1); if (!line) continue; let ev; try { ev = JSON.parse(line); } catch { continue; } if (ev.type === 'result') final = ev; try { onEvent && onEvent(ev, abort); } catch {} } });
+      release(); buf += d; let i; while ((i = buf.indexOf('\n')) >= 0) { const line = buf.slice(0, i).trim(); buf = buf.slice(i + 1); if (!line) continue; let ev; try { ev = JSON.parse(line); } catch { continue; } if (ev.type === 'result') final = ev; try { onEvent && onEvent(ev, abort); } catch {} } });
     p.stderr.on('data', d => (err += d));
     p.on('error', e => finish(() => reject(new Error(e.code === 'ENOENT' ? 'Claude Code CLI not found. Install: npm i -g @anthropic-ai/claude-code, then run `claude` once to sign in.' : e.message))));
     p.on('close', code => finish(() => resolve({ code, out: stream ? (final ? JSON.stringify(final) : '') : out, err })));

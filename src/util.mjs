@@ -29,7 +29,7 @@ export function pyCan(mod) {
   return cached('py:' + mod, 30000, () => run(PYTHON(), ['-c', `import ${mod}`]).ok);
 }
 export function runAsync(cmd, args, opts = {}) {
-  return new Promise(resolve => execFile(cmd, args, { encoding: 'utf8', timeout: opts.timeout || 20000, windowsHide: true, maxBuffer: 1 << 24 }, (err, out, errout) => resolve({ ok: !err, out: out || '', err: errout || '', missing: err?.code === 'ENOENT' })));
+  return new Promise(resolve => execFile(cmd, args, { encoding: 'utf8', timeout: opts.timeout || 20000, windowsHide: true, maxBuffer: 1 << 24, ...(opts.env ? { env: opts.env } : {}) }, (err, out, errout) => resolve({ ok: !err, out: out || '', err: errout || '', missing: err?.code === 'ENOENT' })));
 }
 
 export function ensureDir(d) { fs.mkdirSync(d, { recursive: true }); return d; }
