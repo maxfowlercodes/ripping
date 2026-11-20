@@ -99,6 +99,14 @@ export async function renderReel2({ script, style, voice = 'auto', lang = 'en', 
     beatInfo.push({ text, file, seconds, words });
     onProgress({ stage: 'voice', done: i + 1, total: n });
   }
+  // Some voices write files whose headers lie about their length (one produced a timestamp of -4e17 and ffmpeg gave up). Re-encode every
+  // voice clip to plain PCM first; a clip that cannot be decoded is dropped to silence for that line instead of failing the whole render.
+  if (!avatarFile) for (let i = 0; i < beatInfo.length; i++) {
+    const b = beatInfo[i]; if (!b.file) continue; const nf = path.join(workDir, `norm_${i}.wav`);
+    const nr = run('ffmpeg', ['-y', '-v', 'error', '-err_detect', 'ignore_err', '-i', b.file, '-vn', '-ar', '44100', '-ac', '1', '-c:a', 'pcm_s16le', nf]); const nd = nr.ok ? probeDuration(nf) : NaN;
+    if (nd > 0.05 && nd < 600) { b.file = nf; if (Math.abs(nd - b.seconds) > 0.3 || !Number.isFinite(b.seconds)) onLog(`  beat ${i + 1}: audio length corrected to ${nd.toFixed(2)}s`); b.seconds = nd; if (b.words && b.words.length && b.words[b.words.length - 1].e > nd + 0.5) b.words = null; }
+    else { onLog(`  beat ${i + 1}: voice clip unreadable, using silence for this line`); b.file = null; }
+  }
   // build spec
   let t0 = 0;
   const specBeats = beatInfo.map((b, i) => {
@@ -127,7 +135,7 @@ export async function renderReel2({ script, style, voice = 'auto', lang = 'en', 
     const args = ['-y']; let fc = '';
     beatInfo.forEach((b, i) => { const d = (specBeats[i].end - specBeats[i].start).toFixed(3);
       if (b.file) args.push('-i', b.file); else args.push('-f', 'lavfi', '-t', d, '-i', 'anullsrc=r=44100:cl=mono');
-      fc += `[${i}:a]aresample=44100,aformat=channel_layouts=mono,apad=whole_dur=${d},atrim=0:${d}[a${i}];`; });
+      fc += `[${i}:a]aresample=44100,aformat=channel_layouts=mono,asetpts=N/SR/TB,apad=whole_dur=${d},atrim=0:${d},asetpts=N/SR/TB[a${i}];`; });
     fc += beatInfo.map((_, i) => `[a${i}]`).join('') + `concat=n=${n}:v=0:a=1[a]`;
     r = run('ffmpeg', [...args, '-filter_complex', fc, '-map', '[a]', '-c:a', 'aac', '-b:a', '160k', aud]);
   }
