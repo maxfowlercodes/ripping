@@ -1,0 +1,7 @@
+<!doctype html><html><body><div id="dlg"><div id="s1"><input type=file accept="video/*" style="display:none"></div>
+<div id="s2" style="display:none"><div id="title-textarea"><div id="textbox" contenteditable="true">oldname.mp4</div></div><div id="description-textarea"><div id="textbox2" contenteditable="true"></div></div>
+<label><input type="radio" name="VIDEO_MADE_FOR_KIDS_NOT_MFK">No, it's not made for kids</label><button id="next-button">Next</button></div>
+<div id="s3" style="display:none"><label><input type="radio" name="PUBLIC">Public</label><button id="done-button">Publish</button></div><div id="fin" style="display:none">Video published <a href="https://youtube.com/shorts/abc123">link</a></div></div>
+<script>let n=0;document.querySelector('input').onchange=()=>{s1.style.display='none';s2.style.display='block'};
+document.getElementById('next-button').onclick=()=>{n++;if(n>=3){s2.style.display='none';s3.style.display='block'}};
+document.getElementById('done-button').onclick=()=>{s3.style.display='none';fin.style.display='block'};</script></body></html>

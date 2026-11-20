@@ -6,6 +6,7 @@ import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 import { openPage, prepareDeterministic, shareDeterministic } from './igflow.mjs';
+import { prepareYoutube as ytPrepare, publishYoutube as ytPublish } from './ytflow.mjs';
 import { spawn } from 'node:child_process';
 import { findBrowser, rootDir } from './browser.mjs';
 import { home, ensureDir } from './util.mjs';
@@ -90,6 +91,35 @@ Reply JSON {status:"ready"} when that screen is showing, {status:"login_required
   const r = await askClaude({ task: 'computer_post', prompt, validate: o => o.status === 'ready' || o.status === 'login_required' || `status ${o.status}: ${o.note || ''}`, ...opts });
   return r.output;
 }
+export const SITES = { instagram: () => IG_URL() + '/', youtube: () => 'https://studio.youtube.com/' };
+/** Open Instagram or YouTube Studio in the Reelkit browser (for signing in). */
+export async function openSite(site) {
+  const url = SITES[site]?.(); if (!url) throw new Error('Unknown site'); const r = await ensureBrowser(url); if (r.launched) return { launched: true };
+  const pg = await openPage(CDP_PORT, { urlMatch: site === 'youtube' ? /youtube\.com/ : /instagram\.com/, gotoUrl: url }); pg.close(); return { launched: false };
+}
+export const YT_URL = 'https://www.youtube.com/upload';
+/** YouTube Shorts, step 1: upload, title, description, audience, visibility; stop before Publish. Reelkit does it itself; Claude is the fallback. */
+export async function prepareShort({ file, title, description, log }) {
+  await ensureBrowser(YT_URL);
+  try { const pg = await openPage(CDP_PORT, { urlMatch: /youtube\.com/ }); try { const r = await ytPrepare(pg, { file: path.resolve(file), title, description, log }); if (r.status === 'ready' || r.status === 'login_required') return r; } finally { pg.close(); } }
+  catch (e) { log?.('Reelkit could not do the YouTube upload itself (' + e.message + '). Asking Claude to do it.'); }
+  const prompt = `Upload a YouTube Short in YouTube Studio.
+1. Go to ${YT_URL}. If a half-finished upload dialog is open, discard it first.
+2. Use "Select files" and upload this exact file: ${file}. If the file chooser does not respond within a minute, STOP and report {status:"error", note}.
+3. Title (replace the filename, keep exactly): ${title}
+4. Description (keep line breaks): ${description}
+5. Audience: choose "No, it's not made for kids".
+6. Click Next until the Visibility step, choose Public.
+Then STOP with the Publish/Save button visible. DO NOT click it. Reply JSON {status:"ready"}, {status:"login_required"} if Google asks you to sign in, or {status:"error", note}.`;
+  const r = await askClaude({ task: 'computer_post', prompt, system: SAFETY().replace(/Instagram/g, 'YouTube').replace(new RegExp(new URL(IG_URL()).host.replace(/\./g, '\\.'), 'g'), 'youtube.com'), schema: postSchema, mcpConfig: mcpConfig(), allowedTools: ALLOWED, validate: o => o.status === 'ready' || o.status === 'login_required' || `status ${o.status}: ${o.note || ''}`, timeoutMs: 900000, force: true, cwd: path.dirname(file), log });
+  return r.output;
+}
+/** YouTube Shorts, step 2: wait for the upload to finish, click Publish, confirm. Never retried by Claude (it could double-publish). */
+export async function publishShort({ log }) {
+  await ensureBrowser(YT_URL); const pg = await openPage(CDP_PORT, { urlMatch: /youtube\.com/ });
+  try { return await ytPublish(pg, { log }); } finally { pg.close(); }
+}
+
 /** Phase B: click Share and confirm. */
 export async function sharePost({ log }) {
   await ensureBrowser();

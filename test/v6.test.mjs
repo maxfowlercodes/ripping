@@ -224,3 +224,16 @@ test('photos: directive parses, only close matches are accepted', async () => {
 test('probeDuration never returns a value that breaks ffmpeg filters', async () => {
   const { probeDuration } = await import('../src/util.mjs'); assert.ok(Number.isNaN(probeDuration('/definitely/not/here.wav')) || probeDuration('/definitely/not/here.wav') > 0);
 });
+
+test('YouTube Shorts flow works on a fake Studio page (upload, title, description, Next x3, Public, Publish)', async () => {
+  const { loadPlaywright, findBrowser } = await import('../src/browser.mjs'); const pw = loadPlaywright(); if (!pw || !findBrowser()) return;
+  const { openPage } = await import('../src/igflow.mjs'); const { prepareYoutube, publishYoutube } = await import('../src/ytflow.mjs'); const path = await import('node:path'); const { pathToFileURL, fileURLToPath } = await import('node:url'); const fs = await import('node:fs'); const os = await import('node:os');
+  const port = 9800 + Math.floor(Math.random() * 400); const b = await pw.chromium.launch({ executablePath: findBrowser(), args: ['--no-sandbox', `--remote-debugging-port=${port}`] });
+  try {
+    const p = await b.newPage(); await p.goto(pathToFileURL(path.join(path.dirname(fileURLToPath(import.meta.url)), 'fixtures', 'fake-youtube.html')).href);
+    const vid = path.join(os.tmpdir(), 'rk-fake-yt.mp4'); fs.writeFileSync(vid, 'x'); const pg = await openPage(port, { urlMatch: /fake-youtube/ });
+    const r = await prepareYoutube(pg, { file: vid, title: 'Does your CV prove it?', description: 'Line one\n\n#Shorts #cv', navigate: false }); assert.equal(r.status, 'ready');
+    assert.equal(await pg.ev(`document.querySelector('#title-textarea #textbox').innerText.trim()`), 'Does your CV prove it?');
+    const pub = await publishYoutube(pg); assert.equal(pub.status, 'posted'); assert.match(pub.url, /shorts\/abc123/); pg.close();
+  } finally { await b.close(); }
+});

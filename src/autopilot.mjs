@@ -13,13 +13,13 @@ import { listSwipe, addFromText } from './swipe.mjs';
 import { parseScript, lint, virality } from './script.mjs';
 import { createReel, getMeta, saveMeta, scriptPath, reelDir } from './store.mjs';
 import { renderReel2 } from './render2.mjs';
-import { prepareReelPost, sharePost } from './computer.mjs';
+import { prepareReelPost, sharePost, prepareShort, publishShort } from './computer.mjs';
 import { publishReel } from './instagram.mjs';
 import { makeAvatar } from './heygen.mjs';
 import { rankStyles, validStyle } from './stylecatalog.mjs';
 import { runResearch, getResearch } from './research.mjs';
 
-export const STEPS = [['brand', 'Brand profile'], ['research', 'Deep research'], ['refs', 'References'], ['idea', 'Choose idea'], ['script', 'Write script'], ['render', 'Render video'], ['caption', 'Caption'], ['post', 'Post'], ['track', 'Track results']];
+export const STEPS = [['brand', 'Brand profile'], ['research', 'Deep research'], ['refs', 'References'], ['idea', 'Choose idea'], ['script', 'Write script'], ['render', 'Render video'], ['caption', 'Caption'], ['post', 'Post'], ['youtube', 'YouTube Shorts'], ['track', 'Track results']];
 const dir = () => ensureDir(path.join(home(), 'runs'));
 const rf = id => path.join(dir(), id + '.json');
 export const getRun = id => readJson(rf(id), null);
@@ -29,7 +29,7 @@ const save = r => { r.updated = Date.now(); writeJson(rf(r.id), r); };
 export function startRun(opts = {}) {
   const b = getBrand(); const id = crypto.randomBytes(4).toString('hex');
   const r = { id, status: 'queued', created: new Date().toISOString(), opts: { post: b.posting.mode, ...opts }, steps: STEPS.map(([sid, name]) => ({ id: sid, name, status: 'pending' })), ctx: {}, log: [] };
-  if (opts.preset) { r.ctx = { slug: opts.preset.slug, caption: opts.preset.caption, idea: { hook: opts.preset.title } }; const cut = STEPS.findIndex(x => x[0] === 'post'); r.steps.forEach((st, i) => { if (i < cut) { st.status = 'done'; st.detail = st.id === 'render' ? 'existing video' : ''; } }); delete r.opts.preset; }
+  if (opts.preset) { r.ctx = { slug: opts.preset.slug, caption: opts.preset.caption, idea: { hook: opts.preset.title } }; const cut = STEPS.findIndex(x => x[0] === (opts.preset.upTo || 'post')); r.steps.forEach((st, i) => { if (i < cut) { st.status = 'done'; st.detail = st.id === 'render' ? 'existing video' : ''; } if (st.id === 'caption' && !opts.preset.skipCaption) { st.status = 'pending'; st.detail = ''; } }); delete r.opts.preset; }
   save(r); return r;
 }
 
@@ -129,8 +129,23 @@ async function stepPost(r) {
   logR(r, 'Claude is clicking Share...'); const s = await sharePost({ log: m => logR(r, m) });
   if (s.status !== 'posted') throw new Error('Share not confirmed: ' + (s.note || s.status)); markPosted({ permalink: s.url }); return s.url ? 'posted ' + s.url : 'posted';
 }
+async function stepYoutube(r) {
+  const b = getBrand(); const mode = r.opts.post || b.posting.mode; if (!b.posting.youtube) return 'off (turn on YouTube Shorts in Settings)'; if (mode === 'none') return 'not posting (render only)';
+  const slug = r.ctx.slug; const m = getMeta(slug); if (m.youtube?.status === 'posted') return 'already posted ' + (m.youtube.url || '');
+  const yt = r.ctx.yt || m.youtube; if (!yt?.title || !yt?.description) throw new Error('There is no YouTube title and description for this reel yet. Retry and Reelkit will write them first.');
+  const file = path.resolve(ensure916(path.resolve(reelDir(slug), 'reel.mp4'), x => logR(r, x)));
+  const save2 = patch => { const mm = getMeta(slug); mm.youtube = { ...(mm.youtube || {}), ...patch }; saveMeta(slug, mm); };
+  if (!r.ctx.ytPrepared) { logR(r, 'Preparing the YouTube Short...'); const p = await prepareShort({ file, title: yt.title, description: yt.description, log: x => logR(r, x) });
+    if (p.status === 'login_required') { addInbox({ type: 'need-login', title: 'Log in to YouTube', body: 'Open the Reelkit browser window, sign in to Google/YouTube, then press Resume.', payload: { runId: r.id } }); throw new Wait({ type: 'login', message: 'Sign in to YouTube in the Reelkit browser window, then resume.' }); }
+    r.ctx.ytPrepared = true; save(r); }
+  if (mode === 'review' && !r.ctx.answers?.['review-yt']) throw new Wait({ type: 'review-yt', message: 'Ready on YouTube: check the browser window', inbox: { type: 'review-post', title: 'Publish this Short on YouTube?', body: `${yt.title}\n\n${yt.description}`, payload: { slug, caption: yt.description, title: yt.title, platform: 'youtube', method: 'computer' } } });
+  const a = r.ctx.answers?.['review-yt']?.action; if (a === 'cancel') return 'cancelled (nothing published)'; if (a === 'manual-done') { save2({ status: 'posted', postedAt: new Date().toISOString(), via: 'manual' }); return 'you published it manually'; }
+  logR(r, 'Publishing on YouTube...'); const out = await publishShort({ log: x => logR(r, x) });
+  if (out.status !== 'posted') { save2({ status: 'failed', error: out.note || 'not confirmed' }); throw new Error('YouTube publish not confirmed: ' + (out.note || out.status)); }
+  save2({ status: 'posted', postedAt: new Date().toISOString(), url: out.url || '', via: 'computer' }); return out.url ? 'published ' + out.url : 'published';
+}
 async function stepTrack(r) { return 'snapshots are taken at 1h, day 1, 3, 7, 14, 30 while Reelkit is running'; }
-const FN = { brand: stepBrand, research: stepResearch, refs: stepRefs, idea: stepIdea, script: stepScript, render: stepRender, caption: stepCaption, post: stepPost, track: stepTrack };
+const FN = { brand: stepBrand, research: stepResearch, refs: stepRefs, idea: stepIdea, script: stepScript, render: stepRender, caption: stepCaption, post: stepPost, youtube: stepYoutube, track: stepTrack };
 
 export function copyClipboard(text) { try { if (isWin) sh('clip', [], { input: text }); else if (isMac) sh('pbcopy', [], { input: text }); else sh('xclip', ['-selection', 'clipboard'], { input: text }); } catch {} }
 

@@ -25,10 +25,10 @@ import { listInbox, resolveItem, getItem, addInbox } from './inbox.mjs';
 import { startRun, answerGate, listRuns, getRun, cancelRun, retryRun } from './autopilot.mjs';
 import { listIdeas, setIdea, generateIdeas, referenceCount } from './ideas.mjs';
 import { addFromText } from './swipe.mjs';
-import { ensureBrowser } from './computer.mjs';
+import { ensureBrowser, openSite } from './computer.mjs';
 import { getLeads, leadsCsv, statusFile } from './chat.mjs';
 import { loadCatalog } from './stylecatalog.mjs';
-import { systemCheck, INSTALLERS, openClaudeLogin, openClaudeSetupToken, igStatus, browserShot, getOnboarding, setOnboarding, getAutofill, getBrowserTest } from './setup.mjs';
+import { systemCheck, INSTALLERS, openClaudeLogin, openClaudeSetupToken, igStatus, ytStatus, browserShot, getOnboarding, setOnboarding, getAutofill, getBrowserTest } from './setup.mjs';
 import { getResearch } from './research.mjs';
 import { storageReport, cleanStorage, freeBytes } from './storage.mjs';
 import { voiceCatalog, synth } from './voice.mjs';
@@ -119,8 +119,10 @@ export function startDashboard({ port = 4177, lan = false, worker = true, open =
       if (p === '/api/setup/install' && req.method === 'POST') { if (typeof body.id !== 'string' || !Object.hasOwn(INSTALLERS, body.id)) return send(res, 400, { error: 'unknown installer' }); return send(res, 200, enqueue('install', { id: body.id })); }
       if (p === '/api/setup/claude-login' && req.method === 'POST') { openClaudeLogin(); return send(res, 200, { ok: true }); }
       if (p === '/api/reel/reveal' && req.method === 'POST') { const mt = getMeta(String(body.slug || '')); if (!mt) return send(res, 404, {}); const f = path.resolve(reelDir(body.slug), 'reel.mp4'); try { if (process.platform === 'win32') spawn('explorer.exe', ['/select,' + f], { detached: true, stdio: 'ignore' }).unref(); else if (process.platform === 'darwin') spawn('open', ['-R', f], { detached: true, stdio: 'ignore' }).unref(); else spawn('xdg-open', [path.dirname(f)], { detached: true, stdio: 'ignore' }).unref(); } catch {} return send(res, 200, { path: f }); }
-      if (p === '/api/library') return send(res, 200, { items: postLibrary(), igStatus: await igStatus() });
-      if (p === '/api/library/post' && req.method === 'POST') { try { return send(res, 200, startPostRun(String(body.slug || ''), body.mode === 'auto' ? 'auto' : 'review')); } catch (e) { return send(res, 400, { error: e.message }); } }
+      if (p === '/api/browser/open' && req.method === 'POST') { try { return send(res, 200, await openSite(String(body.site || ''))); } catch (e) { return send(res, 400, { error: e.message }); } }
+      if (p === '/api/setup/yt') return send(res, 200, await ytStatus());
+      if (p === '/api/library') return send(res, 200, { items: postLibrary(), igStatus: await igStatus(), ytStatus: getBrand().posting.youtube ? await ytStatus() : null, youtube: !!getBrand().posting.youtube });
+      if (p === '/api/library/post' && req.method === 'POST') { try { return send(res, 200, startPostRun(String(body.slug || ''), body.mode === 'auto' ? 'auto' : 'review', body.platform === 'youtube' ? 'youtube' : 'instagram')); } catch (e) { return send(res, 400, { error: e.message }); } }
       if (p === '/api/library/mark-posted' && req.method === 'POST') { const mt = getMeta(body.slug); if (!mt) return send(res, 404, {}); Object.assign(mt, { status: 'posted', postedAt: new Date().toISOString(), postedVia: 'manual', permalink: String(body.permalink || '').slice(0, 300) }); saveMeta(body.slug, mt); return send(res, 200, { ok: true }); }
       if (p === '/api/library/reset' && req.method === 'POST') { const mt = getMeta(body.slug); if (!mt) return send(res, 404, {}); if (mt.status !== 'posted') { delete mt.scheduledAt; mt.status = 'draft'; saveMeta(body.slug, mt); } return send(res, 200, { ok: true }); }
       if (p === '/api/browser/shot') { try { const sh = await browserShot(); res.writeHead(200, { 'content-type': 'image/jpeg', 'cache-control': 'no-store' }); return res.end(sh.jpeg); } catch (e) { return send(res, 503, { error: e.message }); } }

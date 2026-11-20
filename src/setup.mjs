@@ -60,6 +60,16 @@ export async function igStatus(host = (process.env.REELKIT_IG_URL || 'https://ww
   } catch (e) { return { browser: true, loggedIn: false, error: e.message }; }
 }
 
+const ytFile = () => path.join(home(), 'yt-link.json');
+/** Is the Reelkit browser signed in to Google/YouTube? Same approach as Instagram: cookie presence only, remembered while the browser is closed. */
+export async function ytStatus() {
+  if (!(await portOpen(CDP_PORT))) { const k = readJson(ytFile(), null); const exp = k?.expires > 0 ? k.expires * 1000 : k ? Date.now() + 864e5 : 0; return k && exp > Date.now() ? { browser: false, loggedIn: true, remembered: true } : { browser: false, loggedIn: false }; }
+  try { const cookies = await browserCookies(); if (cookies === null) return { browser: true, loggedIn: null };
+    const c = cookies.find(x => ['__Secure-3PSID', 'SAPISID', '__Secure-1PSID'].includes(x.name) && /(youtube|google)\.com$/.test(x.domain.replace(/^\./, '')) && x.value);
+    try { if (c) writeJson(ytFile(), { expires: c.expires, at: Date.now() }); else fs.rmSync(ytFile(), { force: true }); } catch {} return { browser: true, loggedIn: !!c };
+  } catch (e) { return { browser: true, loggedIn: false, error: e.message }; }
+}
+
 /** Rows for the wizard. fix.kind: install (one click) | terminal | open (launch browser) | manual (text only) */
 export async function systemCheck() {
   if (probe.on) await refreshProbes({ maxAgeMs: 2500 }); // async + single-flight: never blocks other requests

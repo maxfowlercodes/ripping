@@ -14,6 +14,7 @@ const schema = { type: 'object', properties: {
   bios: { type: 'array', items: { type: 'object', properties: { text: { type: 'string' }, angle: { type: 'string' } }, required: ['text'] } },
   link: { type: 'object', properties: { suggestion: { type: 'string' }, why: { type: 'string' } } },
   picture: { type: 'object', properties: { brief: { type: 'string' }, why: { type: 'string' }, keepFace: { type: 'boolean' } }, required: ['brief'] },
+  youtube: { type: 'object', properties: { channelName: { type: 'string' }, description: { type: 'string' }, handleIdeas: list, links: list, keywords: list, trailer: { type: 'string' } }, required: ['channelName', 'description'] },
   highlights: list, pinned: list, oldContent: { type: 'string' }, checklist: list },
   required: ['bios', 'picture'] };
 
@@ -26,6 +27,7 @@ Design the profile so a stranger who lands from a reel understands in 3 seconds 
 - bios: 3 options, each max 150 characters, 4 short lines max, with a different angle each (outcome, proof, audience). The last line is one action matching this CTA: ${b.ctaType || 'bio'}${b.ctaOffer ? ' for ' + b.ctaOffer : ''}. No emoji spam, no hype words, no made-up numbers or claims.
 - link: what the single bio link should point to and why.
 - picture: a clear brief for the profile picture (keep it recognisable at 40px; say whether to keep a face photo or use a logo mark) and why.
+- youtube: the same account on YouTube: channelName (max 30 chars), description (the channel About text, max 900 characters, first two lines say who it is for and what they get, then what is posted and how often, then the call to action; no invented claims), handleIdeas (3 options, lowercase, no spaces), links (up to 3 link labels worth adding), keywords (5 channel keywords), trailer (one line on what a Shorts-first channel should feature or pin).
 - highlights: 4 highlight titles worth having (max 12 chars each).
 - pinned: 3 kinds of posts to pin first.
 - oldContent: ONE plain paragraph on what to do with the earlier posts (archive vs keep vs pin). Never advise deleting posts that have reach.
