@@ -159,4 +159,11 @@ export async function pumpRuns() {
   }
   return false;
 }
+/** Resume a failed or cancelled run from the step that stopped; everything already finished (script, render, caption) is kept. */
+export function retryRun(id) {
+  const r = getRun(id); if (!r || !['failed', 'cancelled'].includes(r.status)) return null;
+  if (listRuns().some(x => ['queued', 'running', 'waiting'].includes(x.status))) return null;
+  for (const s of r.steps) if (s.status === 'failed' || s.status === 'running' || s.status === 'waiting') { s.status = 'pending'; s.detail = ''; }
+  if (r.ctx) { delete r.ctx.answers; if (r.ctx.prepared) delete r.ctx.prepared; } r.error = ''; r.gate = null; r.status = 'queued'; save(r); return r;
+}
 export function cancelRun(id) { const r = getRun(id); if (r && !['done', 'failed'].includes(r.status)) { r.status = 'cancelled'; if (r.gate?.inboxId) resolveItem(r.gate.inboxId, { cancelled: true }, 'dismissed'); save(r); } return r; }

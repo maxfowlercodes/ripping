@@ -22,6 +22,39 @@
   const P = (tag, a, parent) => svg(tag, a, parent);
 
   const characters = {
+    host(g, o) { // a flat-vector presenter: proper proportions, shaded face, expressive brows, lip shapes that follow the audio
+      const long = !!o.long, skin = o.skin || '#f0c4a0', skinD = o.skinShade || '#dba583', hair = o.hair || (long ? '#4a2a18' : '#2b2118'), hairL = o.hairLight || (long ? '#6b3f26' : '#44352a'), shirt = o.shirt || '#6366f1', shirtD = o.shirtShade || '#4f46e5', iris = o.iris || '#5b7ea6';
+      const uid = 'h' + Math.floor(Math.random() * 1e6); const defs = P('defs', {}, g);
+      const sg = P('linearGradient', { id: uid + 's', x1: 0, y1: 0, x2: 0, y2: 1 }, defs); P('stop', { offset: 0, 'stop-color': skin }, sg); P('stop', { offset: 1, 'stop-color': skinD }, sg);
+      const hg = P('linearGradient', { id: uid + 'h', x1: 0, y1: 0, x2: 1, y2: 1 }, defs); P('stop', { offset: 0, 'stop-color': hairL }, hg); P('stop', { offset: 1, 'stop-color': hair }, hg);
+      const clip = P('clipPath', { id: uid + 'c' }, defs); const clipPath = P('path', { d: '' }, clip);
+      const bodyG = P('g', {}, g), headG = P('g', {}, g);
+      if (long) P('path', { d: 'M128 330 C96 130 215 86 300 86 C400 86 506 134 472 336 L506 640 C440 668 384 610 380 566 L220 566 C216 610 160 668 94 640 Z', fill: `url(#${uid}h)` }, bodyG);
+      P('path', { d: 'M20 770 C22 650 110 604 228 588 L372 588 C490 604 578 650 580 770 Z', fill: shirt }, bodyG); P('path', { d: 'M20 770 C22 690 60 640 120 616 C100 660 96 720 100 770 Z', fill: shirtD, opacity: .55 }, bodyG);
+      P('rect', { x: 252, y: 460, width: 96, height: 150, rx: 40, fill: skinD }, bodyG); P('path', { d: 'M222 592 C250 650 350 650 378 592 C350 626 250 626 222 592 Z', fill: skin }, bodyG); P('path', { d: 'M226 588 C256 640 344 640 374 588 L380 600 C350 668 250 668 220 600 Z', fill: shirtD }, bodyG);
+      P('ellipse', { cx: 300, cy: 512, rx: 46, ry: 20, fill: '#000', opacity: .12 }, bodyG);
+      P('ellipse', { cx: 146, cy: 345, rx: 20, ry: 38, fill: skinD }, headG); P('ellipse', { cx: 454, cy: 345, rx: 20, ry: 38, fill: skinD }, headG);
+      P('path', { d: 'M300 126 C412 126 462 214 457 322 C452 424 386 496 300 496 C214 496 148 424 143 322 C138 214 188 126 300 126 Z', fill: `url(#${uid}s)` }, headG);
+      P('ellipse', { cx: 206, cy: 398, rx: 34, ry: 20, fill: '#f08a8a', opacity: .22 }, headG); P('ellipse', { cx: 394, cy: 398, rx: 34, ry: 20, fill: '#f08a8a', opacity: .22 }, headG);
+      const eyes = [240, 360].map(cx => { const e = P('g', {}, headG); P('ellipse', { cx, cy: 332, rx: 30, ry: 22, fill: '#fff' }, e); const ir = P('g', {}, e); P('circle', { cx, cy: 332, r: 15, fill: iris }, ir); P('circle', { cx, cy: 332, r: 7.5, fill: '#101820' }, ir); P('circle', { cx: cx + 4, cy: 327, r: 3.2, fill: '#fff' }, ir);
+        const lid = P('ellipse', { cx, cy: 332, rx: 30, ry: 22, fill: skin }, e); P('path', { d: `M${cx - 30} 330 Q${cx} ${306} ${cx + 30} 330`, fill: 'none', stroke: hair, 'stroke-width': 5, 'stroke-linecap': 'round' }, e); return { cx, ir, lid }; });
+      const brows = [240, 360].map((cx, i) => P('path', { d: '', fill: 'none', stroke: hair, 'stroke-width': 10, 'stroke-linecap': 'round' }, headG));
+      P('path', { d: 'M298 350 C291 384 286 398 300 402 C312 402 312 396 307 392', fill: 'none', stroke: skinD, 'stroke-width': 5, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }, headG);
+      const mouth = P('g', { transform: 'translate(300 440)' }, headG); const inner = P('path', { d: '', fill: '#5a1f2b' }, mouth); const teeth = P('rect', { x: -60, y: -4, width: 120, height: 10, rx: 4, fill: '#fff', 'clip-path': `url(#${uid}c)` }, mouth); const tongue = P('ellipse', { cx: 0, cy: 18, rx: 20, ry: 8, fill: '#e87a86', 'clip-path': `url(#${uid}c)` }, mouth); const lips = P('path', { d: '', fill: 'none', stroke: '#d9726f', 'stroke-width': 9, 'stroke-linejoin': 'round', 'stroke-linecap': 'round' }, mouth);
+      // hair on top of the head
+      if (long) { P('path', { d: 'M138 316 C118 150 214 98 300 98 C400 98 486 150 462 316 C448 236 400 176 300 168 C250 172 190 190 138 316 Z', fill: `url(#${uid}h)` }, headG); P('path', { d: 'M300 98 C250 128 200 170 150 262 C170 190 230 120 300 98 Z', fill: hairL, opacity: .5 }, headG); }
+      else { P('path', { d: 'M137 322 C112 160 204 96 300 96 C408 96 492 162 463 322 C452 258 424 214 384 196 C330 214 232 214 190 196 C160 222 142 268 137 322 Z', fill: `url(#${uid}h)` }, headG); P('path', { d: 'M190 198 C250 170 340 170 400 198 C330 190 250 190 190 198 Z', fill: hairL, opacity: .6 }, headG); }
+      return (t, m, v, em, blink) => {
+        const nod = Math.sin(t * 2.1) * 3 + em * 8, tilt = Math.sin(t * 1.15) * 2.4 + (v.wide - v.round) * 0.8;
+        headG.setAttribute('transform', `translate(0 ${nod}) rotate(${tilt} 300 500)`); bodyG.setAttribute('transform', `translate(0 ${Math.sin(t * 1.4) * 2.2})`);
+        const dx = Math.sin(t * 0.8) * 3, dy = Math.sin(t * 0.55 + 1) * 1.6; eyes.forEach(e => { e.ir.setAttribute('transform', `translate(${dx} ${dy})`); const top = 310, b = blink > 0.05 ? blink : 0; e.lid.setAttribute('transform', `translate(0 ${top}) scale(1 ${b}) translate(0 ${-top})`); });
+        brows.forEach((b, i) => { const cx = [240, 360][i], dir = i ? 1 : -1, y = 282 - em * 12 - m * 4; b.setAttribute('d', `M${cx - 32} ${y + 8 + (dir > 0 ? 0 : 0)} Q${cx + dir * 2} ${y - 12 - em * 4} ${cx + 32} ${y + 6}`); });
+        const w = 44 + v.wide * 10 - v.round * 14, open = m * 36 + (v.closed ? 0 : 1), sm = 7 - m * 5;
+        const d = `M${-w} ${-sm} C${-w * 0.5} ${-8} ${w * 0.5} ${-8} ${w} ${-sm} C${w * 0.62} ${open + 8} ${-w * 0.62} ${open + 8} ${-w} ${-sm} Z`; inner.setAttribute('d', open > 3 ? d : ''); clipPath.setAttribute('d', d); lips.setAttribute('d', d);
+        teeth.setAttribute('height', Math.min(14, open * 0.5)); teeth.setAttribute('opacity', open > 5 ? 1 : 0); tongue.setAttribute('cy', open * 0.8); tongue.setAttribute('ry', Math.max(1, open * 0.26)); tongue.setAttribute('rx', w * 0.4);
+      };
+    },
+    hostw(g, o) { return characters.host(g, Object.assign({ long: true, skin: '#eebb99', skinShade: '#d89e7e', iris: '#6b8f5e' }, o)); },
     founder(g, o) {
       const skin = o.skin || '#e8b48a', skinD = o.skinShade || '#d39a72', hair = o.hair || '#2b2118', shirt = o.shirt || '#6366f1', shirtD = o.shirtShade || '#4f46e5';
       const body = P('g', {}, g);

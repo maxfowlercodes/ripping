@@ -22,7 +22,7 @@ import { spawn } from 'node:child_process';
 import { getBrand, saveBrand, missingBrand } from './brand.mjs';
 import { getSettings, saveSettings, usageToday, reelkitWindows, getClaudeToken, setClaudeToken, TASKS, modelFor, askClaude, claudeAvailable, CODE_ONLY, MODELS } from './claude.mjs';
 import { listInbox, resolveItem, getItem, addInbox } from './inbox.mjs';
-import { startRun, answerGate, listRuns, getRun, cancelRun } from './autopilot.mjs';
+import { startRun, answerGate, listRuns, getRun, cancelRun, retryRun } from './autopilot.mjs';
 import { listIdeas, setIdea, generateIdeas, referenceCount } from './ideas.mjs';
 import { addFromText } from './swipe.mjs';
 import { ensureBrowser } from './computer.mjs';
@@ -147,6 +147,8 @@ export function startDashboard({ port = 4177, lan = false, worker = true, open =
         return send(res, 200, { brandMissing: missingBrand(), inbox: open_, runs, ideas: listIdeas('new').concat(listIdeas('approved')).slice(0, 8), refs: referenceCount(), mode: st.mode, usage: u, budget: st.budget, posting: getBrand().posting, claude: claudeAvailable() });
       }
       if (p === '/api/run' && req.method === 'POST') return send(res, 200, startRun({ post: body.post, at: body.at || undefined, skipRefs: !!body.skipRefs, idea: body.idea }));
+      if (p === '/api/jobs/retry' && req.method === 'POST') { const j = getJob(String(body.id || '')); if (!j || !['failed', 'cancelled'].includes(j.status)) return send(res, 400, { error: 'Only a failed or cancelled task can be retried' }); return send(res, 200, enqueue(j.type, j.payload)); }
+      if (p === '/api/run/retry' && req.method === 'POST') { const r = retryRun(String(body.id || '')); return r ? send(res, 200, r) : send(res, 400, { error: 'Only a failed or cancelled run can be retried' }); }
       if (p === '/api/run/cancel' && req.method === 'POST') return send(res, 200, cancelRun(body.id));
       if (p === '/api/inbox/answer' && req.method === 'POST') {
         const it = getItem(body.id); if (!it) return send(res, 404, { error: 'no such item' }); const a = body.answer || {}; const rid = it.payload?.runId;
@@ -191,7 +193,7 @@ export function startDashboard({ port = 4177, lan = false, worker = true, open =
         return send(res, 200, scriptView(m[1]));
       }
       if ((m = p.match(/^\/api\/has\/([\w-]+)$/))) return send(res, 200, { reel: fs.existsSync(path.join(reelDir(m[1]), 'reel.mp4')), draft: fs.existsSync(path.join(reelDir(m[1]), 'draft.mp4')) });
-      if (p === '/api/render' && req.method === 'POST') { if (!safe(body.slug)) return send(res, 400, {}); return send(res, 200, enqueue('render', { slug: body.slug, style: body.style, voice: body.voice, lang: body.lang, draft: !!body.draft })); }
+      if (p === '/api/render' && req.method === 'POST') { if (!safe(body.slug)) return send(res, 400, {}); if (body.fresh) { try { const w = path.join(reelDir(body.slug), 'work'); for (const f of fs.readdirSync(w)) if (/^(seg_|audio|video|a_)/.test(f)) fs.rmSync(path.join(w, f), { force: true }); } catch {} } return send(res, 200, enqueue('render', { slug: body.slug, style: body.style, voice: body.voice, lang: body.lang, draft: !!body.draft })); }
       if (p === '/api/schedule' && req.method === 'POST') { const mt = getMeta(body.slug); if (!mt) return send(res, 404, {}); Object.assign(mt, { status: 'scheduled', scheduledAt: new Date(body.at).toISOString(), caption: body.caption ?? mt.caption ?? mt.title, account: body.account || mt.account, trial: !!body.trial }); saveMeta(body.slug, mt); return send(res, 200, mt); }
       if (p === '/api/unschedule' && req.method === 'POST') { const mt = getMeta(body.slug); if (mt) { mt.status = 'rendered'; delete mt.scheduledAt; saveMeta(body.slug, mt); } return send(res, 200, {}); }
       if (p === '/api/post-now' && req.method === 'POST') { const mt = getMeta(body.slug); Object.assign(mt, { caption: body.caption ?? mt.caption ?? mt.title, account: body.account || mt.account, trial: !!body.trial }); saveMeta(body.slug, mt); return send(res, 200, enqueue('post', { slug: body.slug })); }

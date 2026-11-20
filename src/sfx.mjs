@@ -12,7 +12,7 @@ const GEN = {
 };
 
 /** events: [{t: seconds, kind}] -> mono 16-bit WAV of length `total` seconds. Returns false if there is nothing to write. */
-export function writeSfx(events, total, file, gain = 1) {
+export function writeSfx(events, total, file, gain = 0.95) {
   if (!events.length) return false; const n = Math.ceil(total * SR); const mix = new Float32Array(n);
   for (const e of events) { const g = GEN[e.kind]; if (!g) continue; const s = g(); const start = Math.max(0, Math.floor(e.t * SR)); for (let i = 0; i < s.length && start + i < n; i++) mix[start + i] += s[i] * gain; }
   const buf = Buffer.alloc(44 + n * 2); buf.write('RIFF', 0); buf.writeUInt32LE(36 + n * 2, 4); buf.write('WAVEfmt ', 8); buf.writeUInt32LE(16, 16); buf.writeUInt16LE(1, 20); buf.writeUInt16LE(1, 22); buf.writeUInt32LE(SR, 24); buf.writeUInt32LE(SR * 2, 28); buf.writeUInt16LE(2, 32); buf.writeUInt16LE(16, 34); buf.write('data', 36); buf.writeUInt32LE(n * 2, 40);

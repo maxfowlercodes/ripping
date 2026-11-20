@@ -204,3 +204,11 @@ test('composer flow works on an animated fake Instagram page (open, attach, next
     assert.equal((await shareDeterministic(pg)).status, 'posted'); pg.close();
   } finally { await b.close(); }
 });
+
+test('failed runs can be retried from the step that stopped', async () => {
+  const { startRun, getRun, retryRun, cancelRun } = await import('../src/autopilot.mjs'); const { writeJson, home } = await import('../src/util.mjs'); const path = await import('node:path');
+  for (const x of (await import('../src/autopilot.mjs')).listRuns()) cancelRun(x.id);
+  const r = startRun({ post: 'none' }); const f = getRun(r.id); f.status = 'failed'; f.error = 'boom'; f.steps[0].status = 'done'; f.steps[5].status = 'failed'; writeJson(path.join(home(), 'runs', r.id + '.json'), f);
+  const n = retryRun(r.id); assert.equal(n.status, 'queued'); assert.equal(n.steps[0].status, 'done'); assert.equal(n.steps[5].status, 'pending'); assert.equal(n.error, '');
+  assert.equal(retryRun(r.id), null); cancelRun(r.id);
+});
