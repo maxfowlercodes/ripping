@@ -11,7 +11,7 @@ export function saveSecrets(s) { const p = secretsPath(); ensureDir(path.dirname
 /** Put saved API keys into process.env (without overriding real env vars). */
 export function applySecrets() {
   const s = loadSecrets();
-  for (const [k, v] of [['ELEVENLABS_API_KEY', s.elevenlabs], ['ELEVENLABS_VOICE_ID', s.elevenlabsVoice], ['HEYGEN_API_KEY', s.heygen]]) if (v && !process.env[k]) process.env[k] = v;
+  for (const [k, v] of [['ELEVENLABS_API_KEY', s.elevenlabs], ['ELEVENLABS_VOICE_ID', s.elevenlabsVoice], ['HEYGEN_API_KEY', s.heygen], ['PEXELS_API_KEY', s.pexels]]) if (v && !process.env[k]) process.env[k] = v;
 }
 export function listAccounts() {
   const s = loadSecrets(); const out = s.accounts.map(a => ({ name: a.name, igUserId: a.igUserId, hasToken: !!a.token }));

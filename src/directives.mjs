@@ -1,7 +1,7 @@
 // Visual directives at the end of a script line:  Some words. {counter: 9851 | paying users | +64%}
 // Mark key words with *asterisks*.
 const num = s => Number(String(s).replace(/[, ]/g, ''));
-export const DIRECTIVES = ['counter', 'chart', 'bars', 'tier', 'code', 'list', 'big', 'image', 'screen', 'none', 'chat', 'notify', 'donut', 'compare', 'timeline', 'browser', 'quote', 'price', 'stats'];
+export const DIRECTIVES = ['counter', 'chart', 'bars', 'tier', 'code', 'list', 'big', 'image', 'photo', 'screen', 'none', 'chat', 'notify', 'donut', 'compare', 'timeline', 'browser', 'quote', 'price', 'stats'];
 
 export function splitDirective(line) {
   const m = line.match(/^(.*?)\s*\{\s*(\w+)\s*(?::\s*([^}]*))?\}\s*$/);
@@ -27,6 +27,7 @@ export function parseVisual(type, arg) {
     case 'list': return { type, items: arg.split(';').map(s => s.trim()).filter(Boolean) };
     case 'big': return { type, text: arg };
     case 'image': return { type, src: arg };
+    case 'photo': return { type, query: arg.slice(0, 80) };
     case 'screen': return { type, url: arg };
     case 'browser': return { type, url: arg };
     case 'chat': return { type, msgs: arg.split(';').map(x => { const m = x.match(/^\s*(me|them)\s*:\s*(.*)$/i); return m ? { who: m[1].toLowerCase(), text: m[2].trim() } : { who: 'them', text: x.trim() }; }).filter(m => m.text) };

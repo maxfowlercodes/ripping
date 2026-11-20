@@ -139,9 +139,12 @@ export async function renderReel2({ script, style, voice = 'auto', lang = 'en', 
   const browser = await launch();
   try {
     // resolve image/screen visuals to absolute file URLs
+    let photosUsed = 0; // photos are a rare accent: at most one per video, never the hook or the closing line
     for (let i = 0; i < specBeats.length; i++) {
       const v = specBeats[i].visual; if (!v) continue;
+      if (v.type === 'photo' && (photosUsed >= 1 || i === 0 || i === specBeats.length - 1 || (await import('./brand.mjs')).getBrand().production?.photos === false)) { onLog('  skipping a photo (kept to one, mid-video)'); specBeats[i].visual = null; continue; }
       if (v.type === 'screen' || v.type === 'browser') { const f = path.join(workDir, 'screen_' + sha(v.url) + '.png'); if (!fs.existsSync(f)) { onLog('  capturing ' + v.url); await grabScreen(browser, v.url, f); } specBeats[i].visual = v.type === 'browser' ? { type: 'browser', url: v.url, src: pathToFileURL(f).href } : { type: 'image', src: pathToFileURL(f).href }; }
+      else if (v.type === 'photo') { try { const { fetchPhoto } = await import('./pexels.mjs'); const ph = await fetchPhoto(v.query, workDir); specBeats[i].visual = { type: 'photo', src: pathToFileURL(ph.file).href }; photosUsed++; onLog(`  photo "${v.query}" from Pexels`); } catch (e) { onLog(`  no photo for "${v.query}" (${e.message}); showing the plain caption instead`); specBeats[i].visual = null; } }
       else if (v.type === 'image' && !/^(file|https?|data):/.test(v.src)) specBeats[i].visual = { type: 'image', src: pathToFileURL(path.resolve(v.src)).href };
     }
     const k = draft ? 0.5 : 1;

@@ -117,6 +117,12 @@
     return { update(p) { const q = ease.back(clamp(p / 0.25)); e.style.transform = `scale(${0.5 + 0.5 * q})`; } };
   };
 
+  RK.widgets.photo = (box, v, cfg) => { // a real photo, softly zoomed (Ken Burns), rounded card
+    const f = h('div', { width: '700px', height: cfg.compact ? '440px' : '540px', borderRadius: '48px', overflow: 'hidden', boxShadow: '0 30px 80px rgba(0,0,0,.38)', position: 'relative', background: '#111' }, box);
+    const img = h('img', { position: 'absolute', left: 0, top: 0, width: '100%', height: '100%', objectFit: 'cover', transformOrigin: '50% 40%' }, f); img.src = v.src;
+    h('div', { position: 'absolute', inset: 0, background: 'linear-gradient(180deg, rgba(0,0,0,0) 60%, rgba(0,0,0,.28))' }, f);
+    return { update(p) { img.style.transform = `scale(${1.04 + 0.12 * p}) translate(${(p - 0.5) * -2}%, ${(p - 0.5) * -2}%)`; } };
+  };
   RK.widgets.image = (box, v, cfg) => {
     const f = h('div', { width: '520px', height: '740px', borderRadius: '54px', border: '12px solid #0b0b0f', boxShadow: '0 30px 80px rgba(0,0,0,.4)', overflow: 'hidden', background: '#fff', position: 'relative' }, box);
     const img = h('img', { width: '100%', position: 'absolute', left: 0, top: 0, transformOrigin: '50% 0' }, f); img.src = v.src;

@@ -139,8 +139,8 @@ export function startDashboard({ port = 4177, lan = false, worker = true, open =
       if (p === '/api/onboarding') { if (req.method === 'POST') setOnboarding({ step: body.step, done: body.done, skipped: body.skipped }); return send(res, 200, getOnboarding()); }
 
       if (p === '/api/keys') {
-        if (req.method === 'POST') { for (const [k, name, env] of [['elevenlabs', 'elevenlabs', 'ELEVENLABS_API_KEY'], ['heygen', 'heygen', 'HEYGEN_API_KEY']]) { const v = typeof body[k] === 'string' ? body[k].trim() : ''; if (v && /^[\w.-]{8,200}$/.test(v)) { setKey(name, v); process.env[env] = v; } else if (body[k] === '') { setKey(name, ''); delete process.env[env]; } } }
-        const sec = loadSecrets(); return send(res, 200, { elevenlabs: !!sec.elevenlabs, heygen: !!sec.heygen }); // values are never sent back
+        if (req.method === 'POST') { for (const [k, name, env] of [['elevenlabs', 'elevenlabs', 'ELEVENLABS_API_KEY'], ['heygen', 'heygen', 'HEYGEN_API_KEY'], ['pexels', 'pexels', 'PEXELS_API_KEY']]) { const v = typeof body[k] === 'string' ? body[k].trim() : ''; if (v && /^[\w.-]{8,200}$/.test(v)) { setKey(name, v); process.env[env] = v; } else if (body[k] === '') { setKey(name, ''); delete process.env[env]; } } }
+        const sec = loadSecrets(); return send(res, 200, { elevenlabs: !!sec.elevenlabs, heygen: !!sec.heygen, pexels: !!sec.pexels }); // values are never sent back
       }
       if (p === '/api/today') {
         const open_ = listInbox('open'); const runs = listRuns().slice(0, 3); const st = getSettings(); const u = usageToday();

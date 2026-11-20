@@ -212,3 +212,11 @@ test('failed runs can be retried from the step that stopped', async () => {
   const n = retryRun(r.id); assert.equal(n.status, 'queued'); assert.equal(n.steps[0].status, 'done'); assert.equal(n.steps[5].status, 'pending'); assert.equal(n.error, '');
   assert.equal(retryRun(r.id), null); cancelRun(r.id);
 });
+
+test('photos: directive parses, only close matches are accepted', async () => {
+  const { splitDirective } = await import('../src/directives.mjs'); const v = splitDirective('Recruiters skim. {photo: recruiter desk laptop}'); assert.equal(v.visual.type, 'photo'); assert.equal(v.visual.query, 'recruiter desk laptop');
+  const { matchesQuery } = await import('../src/pexels.mjs');
+  assert.ok(matchesQuery('recruiter desk laptop', 'A recruiter reading a CV at a desk with a laptop'));
+  assert.ok(!matchesQuery('recruiter desk laptop', 'A woman smiling on a beach'));
+  assert.ok(!matchesQuery('handshake office', 'Two people in an office'));
+});
