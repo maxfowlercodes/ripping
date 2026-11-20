@@ -3,7 +3,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
-import { home, ensureDir, readJson, writeJson, run as sh, isWin, isMac } from './util.mjs';
+import { home, ensureDir, readJson, writeJson, run as sh, isWin, isMac, ensure916 } from './util.mjs';
 import { getBrand, missingBrand } from './brand.mjs';
 import { addInbox, resolveItem, getItem } from './inbox.mjs';
 import { askClaude } from './claude.mjs';
@@ -98,14 +98,19 @@ async function stepRender(r) {
 }
 
 async function stepCaption(r) {
-  if (r.ctx.caption) return 'ok'; const b = getBrand(); const sc = parseScript(fs.readFileSync(scriptPath(r.ctx.slug), 'utf8'));
-  const c = await askClaude({ task: 'caption_hashtags', prompt: captionPrompt({ brand: b, lines: sc.beats }), system: SYSTEM, schema: schemas.caption, log: m => logR(r, m) });
-  r.ctx.caption = `${c.output.caption}\n\n${(c.output.hashtags || []).slice(0, 3).join(' ')}`.trim(); const m = getMeta(r.ctx.slug); m.caption = r.ctx.caption; saveMeta(r.ctx.slug, m); save(r); return c.model;
+  const b = getBrand(); const m0 = getMeta(r.ctx.slug); const needYt = !!b.posting.youtube && !m0.youtube?.title;
+  if (r.ctx.caption?.trim() && !needYt) return 'ok';
+  const sc = parseScript(fs.readFileSync(scriptPath(r.ctx.slug), 'utf8'));
+  const c = await askClaude({ task: 'caption_hashtags', prompt: captionPrompt({ brand: b, lines: sc.beats }), system: SYSTEM, schema: schemas.caption, log: m => logR(r, m), validate: o => (String(o.caption || '').trim().length > 10 && String(o.youtube?.title || '').trim().length > 3) || 'caption or YouTube title is empty' });
+  const cap = `${c.output.caption}\n\n${(c.output.hashtags || []).slice(0, 3).join(' ')}`.trim(); r.ctx.caption = r.ctx.caption?.trim() && needYt ? r.ctx.caption : cap;
+  const yt = { title: c.output.youtube.title.trim().slice(0, 95), description: `${c.output.youtube.description.trim()}\n\n#Shorts ${(c.output.youtube.tags || []).slice(0, 4).map(t => '#' + String(t).replace(/^#/, '').replace(/\s+/g, '')).join(' ')}`.trim(), tags: c.output.youtube.tags || [] }; r.ctx.yt = yt;
+  const m = getMeta(r.ctx.slug); m.caption = r.ctx.caption; m.youtube = { ...(m.youtube || {}), ...yt }; saveMeta(r.ctx.slug, m); save(r); return c.model;
 }
 
 async function stepPost(r) {
-  const b = getBrand(); const slug = r.ctx.slug; const file = path.resolve(reelDir(slug), 'reel.mp4'); const mode = r.opts.post || b.posting.mode; const method = r.opts.method || b.posting.method;
+  const b = getBrand(); const slug = r.ctx.slug; const file = path.resolve(ensure916(path.resolve(reelDir(slug), 'reel.mp4'), m => logR(r, m))); const mode = r.opts.post || b.posting.mode; const method = r.opts.method || b.posting.method;
   if (mode === 'none') return 'not posting (render only)';
+  if (!String(r.ctx.caption || '').trim()) throw new Error('There is no caption for this reel, so nothing was posted. Retry and Reelkit will write one first.');
   if (r.opts.at && new Date(r.opts.at) > new Date()) throw new Wait({ type: 'time', until: r.opts.at, message: 'Scheduled for ' + r.opts.at });
   const markPosted = (extra = {}) => { const m = getMeta(slug); Object.assign(m, { status: 'posted', postedAt: new Date().toISOString(), postedVia: method, account: b.posting.account || m.account, ...extra }); saveMeta(slug, m); };
   const review = (title, body) => { throw new Wait({ type: 'review', message: title, inbox: { type: 'review-post', title, body, payload: { slug, caption: r.ctx.caption, method } } }); };

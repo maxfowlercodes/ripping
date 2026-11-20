@@ -28,6 +28,15 @@ export const clickIcon = (page, labels) => page.ev(`(() => { ${VIS} const want =
 export const hasText = (page, text) => page.ev(`(() => { ${VIS} return [...document.querySelectorAll('[role=dialog] *, body *')].some(e => e.children.length === 0 && vis(e) && (e.innerText || '').toLowerCase().includes(${JSON.stringify(text.toLowerCase())})); })()`);
 export async function waitFor(fn, ms = 10000, step = 400) { const t0 = Date.now(); while (Date.now() - t0 < ms) { try { const v = await fn(); if (v) return v; } catch {} await sleep(step); } return false; }
 
+/** Type like a keyboard does (real key/char events), because the caption editor ignores text that is only inserted into the page. */
+export async function typeText(page, text) {
+  for (const ch of String(text)) {
+    if (ch === '\n') { await page.call('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13, text: '\r' }); await page.call('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13 }); }
+    else if (ch.codePointAt(0) > 0xffff) await page.call('Input.insertText', { text: ch });
+    else await page.call('Input.dispatchKeyEvent', { type: 'char', text: ch, unmodifiedText: ch, key: ch });
+    await sleep(6);
+  }
+}
 export async function setFile(page, file) {
   const r = await page.call('Runtime.evaluate', { expression: `(() => { const l = [...document.querySelectorAll('input[type=file]')]; return l.find(i => /video|mp4|quicktime/i.test(i.accept || '')) || l[l.length - 1] || null; })()` });
   if (!r.result?.objectId) throw new Error('No file input found on the page');
@@ -44,13 +53,15 @@ export async function prepareDeterministic(page, { file, caption, trial, log = (
   await sleep(700); await clickByText(page, ['Post']); // a submenu shows Post / Live video / Ad on some layouts
   await step('Waiting for the upload screen', () => waitFor(() => page.ev(`!!document.querySelector('input[type=file]')`), 9000));
   await step('Handing over the video', async () => { await setFile(page, file); return true; });
-  await step('Waiting for the preview', () => waitFor(() => clickByText(page, ['Next']), 25000, 700)); await sleep(1200);
+  await step('Waiting for the preview', () => waitFor(() => page.ev(`(() => { const b = [...document.querySelectorAll('button,[role=button]')].find(x => /^next$/i.test((x.innerText || '').trim())); return !!b; })()`), 25000, 700));
+  try { log('Setting the crop to 9:16'); if (await clickIcon(page, ['Select crop', 'Crop']) || await clickByText(page, ['Select crop'])) { await sleep(500); await clickByText(page, ['9:16']); await sleep(400); } } catch {} // best effort: our videos are already 9:16, this stops Instagram picking another ratio
+  await step('Moving past the crop step', () => clickByText(page, ['Next'])); await sleep(1200);
   await step('Moving to the edit step', () => waitFor(() => clickByText(page, ['Next']), 12000, 700)); await sleep(900);
   await page.ev(`(() => { const ok = [...document.querySelectorAll('button,[role=button]')].find(b => /^ok$/i.test((b.innerText || '').trim())); if (ok) ok.click(); return true; })()`);
   await step('Writing the caption', async () => {
     const found = await waitFor(() => page.ev(`(() => { const e = document.querySelector('[aria-label="Write a caption..."],[aria-label^="Write a caption"],div[role=textbox][contenteditable=true],textarea'); if (!e) return false; e.focus(); e.click(); return true; })()`), 15000);
     if (!found) return false;
-    const lines = String(caption).split('\n'); for (let i = 0; i < lines.length; i++) { if (i) { await page.call('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13, text: '\r' }); await page.call('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13 }); } if (lines[i]) await page.call('Input.insertText', { text: lines[i] }); }
+    await typeText(page, String(caption)); const lines = String(caption).split('\n');
     await sleep(500); const typed = await page.ev(`(() => { const e = document.querySelector('[aria-label^="Write a caption"],div[role=textbox][contenteditable=true],textarea'); return e ? (e.innerText || e.value || '') : ''; })()`);
     return typed.replace(/\s+/g, ' ').includes(lines.find(l => l.trim()).trim().slice(0, 25));
   });
@@ -59,7 +70,8 @@ export async function prepareDeterministic(page, { file, caption, trial, log = (
   return { status: 'ready', note: 'filled in by Reelkit' };
 }
 
-export async function shareDeterministic(page, { log = () => {} } = {}) {
+export async function shareDeterministic(page, { log = () => {}, requireCaption = true } = {}) {
+  if (requireCaption) { const has = await page.ev(`(() => { const e = document.querySelector('[aria-label^="Write a caption"],div[role=textbox][contenteditable=true],textarea'); return e ? (e.innerText || e.value || '').trim().length : -1; })()`); if (has === 0) return { status: 'error', note: 'The caption box is empty, so nothing was shared. Retry the post.' }; }
   log('Clicking Share'); if (!(await clickByText(page, ['Share']))) throw new Error('Share button not found');
   const ok = await waitFor(() => page.ev(`(() => { const t = document.body.innerText; return /your reel has been shared|reel shared|your post has been shared|post shared/i.test(t); })()`), 120000, 1500);
   if (!ok) return { status: 'error', note: 'Clicked Share but did not see the confirmation within 2 minutes. Check Instagram before trying again.' };

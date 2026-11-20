@@ -72,3 +72,13 @@ export function ensureMediaTools() {
   try { if (!has('ffprobe')) { const p = req('@ffprobe-installer/ffprobe').path; if (p && fs.existsSync(p)) add(path.dirname(p)); } } catch {}
   return has('ffmpeg') && has('ffprobe');
 }
+
+/** Width/height of a video via ffprobe, or null. */
+export function probeSize(file) { const r = run('ffprobe', ['-v', 'error', '-select_streams', 'v:0', '-show_entries', 'stream=width,height:stream_side_data=rotation', '-of', 'json', file]); try { const j = JSON.parse(r.out); const st = j.streams?.[0]; if (!st) return null; const rot = Math.abs(Number(st.side_data_list?.[0]?.rotation || 0)); return rot === 90 || rot === 270 ? { width: st.height, height: st.width } : { width: st.width, height: st.height }; } catch { return null; } }
+/** Make sure a video is exactly 1080x1920 (9:16). Returns the path to post: the original if it already is, else a converted copy. */
+export function ensure916(file, log = () => {}) {
+  const sz = probeSize(file); if (sz && sz.width === 1080 && sz.height === 1920) return file;
+  const out = file.replace(/\.mp4$/i, '') + '_9x16.mp4'; log(`Video is ${sz ? sz.width + 'x' + sz.height : 'an unknown size'}, converting to 1080x1920 (9:16)`);
+  const r = run('ffmpeg', ['-y', '-v', 'error', '-i', file, '-vf', 'scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,setsar=1', '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '18', '-pix_fmt', 'yuv420p', '-c:a', 'copy', '-movflags', '+faststart', out]);
+  if (!r.ok) throw new Error('Could not convert the video to 9:16: ' + r.err.slice(-200)); return out;
+}

@@ -5,7 +5,7 @@ const SR = 44100;
 function rng(seed) { let s = seed >>> 0; return () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296) * 2 - 1; }
 
 const GEN = {
-  whoosh(vol = 0.28) { const n = Math.floor(SR * 0.42), r = rng(11); const out = new Float32Array(n); let lp = 0;
+  whoosh(vol = 0.16) { const n = Math.floor(SR * 0.42), r = rng(11); const out = new Float32Array(n); let lp = 0;
     for (let i = 0; i < n; i++) { const t = i / n; const cutoff = 0.04 + 0.5 * Math.sin(Math.PI * t) ** 1.5; lp += (r() - lp) * cutoff; const env = Math.sin(Math.PI * Math.min(1, t * 1.05)) ** 2; out[i] = lp * env * vol * 2.2; } return out; },
   pop(vol = 0.32) { const n = Math.floor(SR * 0.14); const out = new Float32Array(n); let ph = 0; for (let i = 0; i < n; i++) { const t = i / n; const f = 520 + 700 * (1 - t) ** 2; ph += (2 * Math.PI * f) / SR; out[i] = Math.sin(ph) * Math.exp(-t * 7) * vol; } return out; },
   thud(vol = 0.5) { const n = Math.floor(SR * 0.34), r = rng(5); const out = new Float32Array(n); let ph = 0; for (let i = 0; i < n; i++) { const t = i / n; const f = 130 - 70 * t; ph += (2 * Math.PI * f) / SR; out[i] = (Math.sin(ph) * Math.exp(-t * 6) + r() * 0.12 * Math.exp(-t * 30)) * vol; } return out; },
