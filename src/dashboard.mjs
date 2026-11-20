@@ -20,7 +20,7 @@ import { styleList } from './render2.mjs';
 import { has, findFont, home, ensureDir, writeJson, readJson } from './util.mjs';
 import { spawn } from 'node:child_process';
 import { getBrand, saveBrand, missingBrand } from './brand.mjs';
-import { getSettings, saveSettings, usageToday, TASKS, modelFor, askClaude, claudeAvailable, CODE_ONLY, MODELS } from './claude.mjs';
+import { getSettings, saveSettings, usageToday, reelkitWindows, TASKS, modelFor, askClaude, claudeAvailable, CODE_ONLY, MODELS } from './claude.mjs';
 import { listInbox, resolveItem, getItem, addInbox } from './inbox.mjs';
 import { startRun, answerGate, listRuns, getRun, cancelRun } from './autopilot.mjs';
 import { listIdeas, setIdea, generateIdeas, referenceCount } from './ideas.mjs';
@@ -162,6 +162,8 @@ export function startDashboard({ port = 4177, lan = false, worker = true, open =
         if (req.method === 'POST') { const patch = {}; if (body.mode) patch.mode = body.mode; if (body.routing) patch.routing = body.routing; if (body.budget) patch.budget = { ...getSettings().budget, ...body.budget }; saveSettings(patch); }
         const st = getSettings(); return send(res, 200, { settings: st, tasks: Object.entries(TASKS).map(([k, t]) => ({ id: k, desc: t.desc, computer: !!t.computer, model: modelFor(k, st), overridden: !!st.routing?.[k] })), usage: usageToday(), codeOnly: CODE_ONLY, models: MODELS, available: claudeAvailable() });
       }
+      if (p === '/api/usage') return send(res, 200, reelkitWindows());
+      if (p === '/api/usage/refresh' && req.method === 'POST') { try { await askClaude({ task: 'usage_probe', prompt: 'Reply with the single word ok', force: true }); } catch (e) { return send(res, 200, { ...reelkitWindows(), error: e.message }); } return send(res, 200, reelkitWindows()); }
       if (p === '/api/claude/test' && req.method === 'POST') { const r = await askClaude({ task: 'caption_hashtags', prompt: 'Reply JSON {"caption":"ok","hashtags":["#a"]}', schema: { type: 'object', properties: { caption: { type: 'string' }, hashtags: { type: 'array', items: { type: 'string' } } }, required: ['caption', 'hashtags'] }, force: true }); return send(res, 200, { ok: true, model: r.model, usage: r.usage }); }
       if (p === '/api/ideas' && req.method === 'POST') { if (body.generate) { const f = await generateIdeas({ n: 5 }); return send(res, 200, { added: f.length }); } if (body.id) setIdea(body.id, { status: body.status }); return send(res, 200, { ok: true }); }
       if (p === '/api/browser' && req.method === 'POST') return send(res, 200, await ensureBrowser());

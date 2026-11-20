@@ -29,6 +29,7 @@ export const TASKS = {
   chat_reply:        { desc: 'Answer a website/Instagram visitor in the business chat', eco: 'haiku', balanced: 'haiku', quality: 'sonnet', effort: 'low', ttlDays: 0 },
   brand_autofill:    { desc: 'Onboarding: fill in your brand details from your website', eco: 'haiku', balanced: 'sonnet', quality: 'sonnet', effort: 'low', ttlDays: 30, web: true },
   profile_plan:      { desc: 'Suggest your Instagram bio, name, profile picture brief, highlights and pinned posts', eco: 'sonnet', balanced: 'sonnet', quality: 'opus', effort: 'medium', ttlDays: 14 },
+  usage_probe:       { desc: 'Reads your plan usage numbers from Claude (one tiny call)', eco: 'haiku', balanced: 'haiku', quality: 'haiku', effort: 'low', ttlDays: 0 },
   research_site:     { desc: 'First-run: read your website and extract what you really offer', eco: 'sonnet', balanced: 'sonnet', quality: 'opus', effort: 'medium', ttlDays: 30, web: true },
   research_audience: { desc: 'First-run: who buys, their pains and exact words (web search)', eco: 'sonnet', balanced: 'sonnet', quality: 'opus', effort: 'medium', ttlDays: 30, web: true },
   research_competitors: { desc: 'First-run: competitors, adjacent accounts, angles (web search)', eco: 'sonnet', balanced: 'sonnet', quality: 'opus', effort: 'medium', ttlDays: 30, web: true },
@@ -55,6 +56,22 @@ export function modelFor(task, settings = getSettings()) {
 const ledgerPath = () => path.join(home(), 'usage.jsonl');
 export const readLedger = () => (fs.existsSync(ledgerPath()) ? fs.readFileSync(ledgerPath(), 'utf8').split('\n').filter(Boolean).map(l => { try { return JSON.parse(l); } catch { return null; } }).filter(Boolean) : []);
 const logUse = e => { ensureDir(home()); fs.appendFileSync(ledgerPath(), JSON.stringify(e) + '\n'); };
+const limitsPath = () => path.join(home(), 'limits.json');
+export const getLimits = () => readJson(limitsPath(), null);
+/** Claude Code reports your real plan usage (5-hour session and weekly, as shown in the Claude app) on every call as a rate_limit_event. */
+function saveLimits(info) {
+  if (!info) return null; const w = info.unifiedWindows || {}; const cur = getLimits() || {}; const next = { at: new Date().toISOString(), five_hour: cur.five_hour || null, seven_day: cur.seven_day || null };
+  for (const k of ['five_hour', 'seven_day']) { const x = w[k] || (info.rateLimitType === k && info.utilization != null ? { utilization: info.utilization, resetsAt: info.resetsAt, status: info.status } : null); if (x && typeof x.utilization === 'number') next[k] = { utilization: x.utilization, resetsAt: x.resetsAt, status: x.status || 'allowed' }; }
+  writeJson(limitsPath(), next); return next;
+}
+/** What Reelkit itself used inside the 5-hour and 7-day windows (calls, tokens, API-price equivalent, and the share of the plan bar it moved when measurable). */
+export function reelkitWindows(now = Date.now()) {
+  const rows = readLedger().filter(r => !r.cached); const lim = getLimits();
+  const win = (ms, key) => { const since = now - ms; const rs = rows.filter(r => new Date(r.t).getTime() >= since); const by = {}; for (const r of rs) { const k = r.task || 'other'; by[k] = by[k] || { calls: 0, output: 0 }; by[k].calls++; by[k].output += r.output || 0; }
+    const moved = rs.reduce((a, r) => a + (r['d_' + key] > 0 ? r['d_' + key] : 0), 0); const measured = rs.filter(r => typeof r['d_' + key] === 'number').length;
+    return { calls: rs.length, input: rs.reduce((a, r) => a + (r.input || 0), 0), output: rs.reduce((a, r) => a + (r.output || 0), 0), cost: +rs.reduce((a, r) => a + (r.cost || 0), 0).toFixed(3), moved: +moved.toFixed(3), measured, top: Object.entries(by).sort((a, b) => b[1].output - a[1].output).slice(0, 5).map(([task, v]) => ({ task, ...v })) }; };
+  return { limits: lim, five_hour: win(5 * 3600e3, 'five_hour'), seven_day: win(7 * 864e5, 'seven_day') };
+}
 export function usageToday(since = new Date(new Date().setHours(0, 0, 0, 0))) {
   const rows = readLedger().filter(r => new Date(r.t) >= since); const by = {};
   for (const r of rows) { const k = r.cached ? 'cache' : r.model; by[k] = by[k] || { calls: 0, input: 0, output: 0, cost: 0 }; by[k].calls++; by[k].input += r.input || 0; by[k].output += r.output || 0; by[k].cost += r.cost || 0; }
@@ -133,19 +150,21 @@ export async function askClaude({ task, prompt, system, schema, validate, cacheK
   if (!isChat && rows.filter(r => r.task !== 'chat_reply').reduce((a, r) => a + (r.output || 0), 0) >= settings.budget.dailyOutputTokens) throw new Error('Daily Claude output-token budget reached.');
   let lastErr = null;
   for (const m of ladder) {
-    const stream = !!(T.computer || T.web); const args = buildArgs({ task, prompt, system, schema, model: m, mcpConfig, allowedTools, maxTurns, stream, settings });
+    const stream = true; let seen = null; const before = getLimits(); const args = buildArgs({ task, prompt, system, schema, model: m, mcpConfig, allowedTools, maxTurns, stream, settings });
     if (process.env.REELKIT_CLAUDE_DRYRUN) return { output: { dryRun: true, argv: args }, model: m, cached: false, usage: null };
     const cwd = workDir || fs.mkdtempSync(path.join(os.tmpdir(), 'reelkit-claude-')); const t0 = Date.now();
     log(`claude ${m} · ${task}`);
     const onEvent = (ev, abort) => {
       if (ev.type === 'system' && ev.subtype === 'init' && T.computer) { const bad = (ev.mcp_servers || []).filter(x => ['failed', 'needs-auth', 'disabled'].includes(x.status)); if (bad.length) return abort(`The browser-control component did not start (${bad.map(x => x.name + ': ' + x.status).join(', ')}). Check that Node.js is installed, then run "npm install" in the Reelkit folder and try again.`); log('Browser control connected'); }
+      if (ev.type === 'rate_limit_event') { const nl = saveLimits(ev.rate_limit_info); if (nl) seen = nl; }
       if (ev.type === 'assistant') for (const c of ev.message?.content || []) if (c.type === 'tool_use') { const line = describeTool(c.name, c.input); log(line); if (onProgress) onProgress(line); }
     };
     const r = await runCli(args, { cwd, bin: settings.claudeBin || 'claude', timeoutMs, stream, onEvent, stallMs: T.computer ? 150000 : T.web ? 180000 : 0 }); if (!workDir) fs.rmSync(cwd, { recursive: true, force: true });
     const j = parseJsonOut(r.out);
     if (!j) { lastErr = new Error('Claude returned no JSON: ' + (r.err || r.out).slice(0, 300)); continue; }
     const usage = { input: (j.usage?.input_tokens || 0) + (j.usage?.cache_creation_input_tokens || 0) + (j.usage?.cache_read_input_tokens || 0), output: j.usage?.output_tokens || 0, cost: j.total_cost_usd || 0, turns: j.num_turns };
-    logUse({ t: new Date().toISOString(), task, model: m, ...usage, ms: Date.now() - t0, error: !!j.is_error });
+    const fresh = before && Date.now() - new Date(before.at).getTime() < 20 * 60e3; const dlt = k => (seen?.[k] && fresh && before[k] && seen[k].resetsAt === before[k].resetsAt ? +(seen[k].utilization - before[k].utilization).toFixed(4) : undefined);
+    logUse({ t: new Date().toISOString(), task, model: m, ...usage, ms: Date.now() - t0, error: !!j.is_error, d_five_hour: dlt('five_hour'), d_seven_day: dlt('seven_day') });
     if (j.is_error) { lastErr = new Error(String(j.result || 'Claude error').slice(0, 300)); continue; }
     let out = j.structured_output ?? (schema ? extractJson(j.result) : j.result);
     if (schema && out == null) { lastErr = new Error('Claude did not return valid JSON'); continue; }
