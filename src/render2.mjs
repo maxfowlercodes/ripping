@@ -76,7 +76,8 @@ export async function renderReel2({ script, style, voice = 'auto', lang = 'en', 
     if (avatarFile) { const tot = beatsText.reduce((a, b) => a + b.length, 0); seconds = (avatarSecs * text.length) / tot; }
     else {
       const key = sha([text, provider, lang, voiceId || '', process.env.ELEVENLABS_VOICE_ID || '']);
-      const cached = fs.readdirSync(workDir).find(f => f.startsWith('a_' + key));
+      let cached = fs.readdirSync(workDir).find(f => f.startsWith('a_' + key) && !f.endsWith('.json'));
+      if (cached) { const sec = probeDuration(path.join(workDir, cached)); if (!(sec > 0.05)) { onLog('  discarding a broken cached voice file'); fs.rmSync(path.join(workDir, cached), { force: true }); cached = undefined; } }
       if (cached) { file = path.join(workDir, cached); seconds = probeDuration(file); const wj = path.join(workDir, 'a_' + key + '.json'); if (fs.existsSync(wj)) words = JSON.parse(fs.readFileSync(wj, 'utf8')); }
       else {
         // try the chosen voice, then fall back to the next working one (a provider that failed once is skipped for this render)
@@ -94,6 +95,7 @@ export async function renderReel2({ script, style, voice = 'auto', lang = 'en', 
         if (words) fs.writeFileSync(path.join(workDir, 'a_' + key + '.json'), JSON.stringify(words));
       }
     }
+    if (!Number.isFinite(seconds) || seconds <= 0) { onLog(`  could not read the length of beat ${i + 1}'s audio, estimating it`); seconds = est(text); }
     beatInfo.push({ text, file, seconds, words });
     onProgress({ stage: 'voice', done: i + 1, total: n });
   }

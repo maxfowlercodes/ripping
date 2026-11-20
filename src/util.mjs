@@ -47,7 +47,10 @@ export function slug(s) { return String(s).toLowerCase().replace(/[^a-z0-9]+/g, 
 
 export function probeDuration(file) {
   const r = run('ffprobe', ['-v', 'error', '-show_entries', 'format=duration', '-of', 'default=nw=1:nk=1', file]);
-  return r.ok ? parseFloat(r.out) : NaN;
+  const v = r.ok ? parseFloat(r.out) : NaN; if (Number.isFinite(v) && v > 0) return v;
+  // ffprobe missing or unreadable output: ask ffmpeg itself ("Duration: 00:00:03.42")
+  const f = run('ffmpeg', ['-hide_banner', '-i', file]); const m = (f.err + f.out).match(/Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)/);
+  return m ? +m[1] * 3600 + +m[2] * 60 + parseFloat(m[3]) : NaN;
 }
 
 export function findFont(bold = true) {

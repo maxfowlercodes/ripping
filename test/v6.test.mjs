@@ -220,3 +220,7 @@ test('photos: directive parses, only close matches are accepted', async () => {
   assert.ok(!matchesQuery('recruiter desk laptop', 'A woman smiling on a beach'));
   assert.ok(!matchesQuery('handshake office', 'Two people in an office'));
 });
+
+test('probeDuration never returns a value that breaks ffmpeg filters', async () => {
+  const { probeDuration } = await import('../src/util.mjs'); assert.ok(Number.isNaN(probeDuration('/definitely/not/here.wav')) || probeDuration('/definitely/not/here.wav') > 0);
+});
