@@ -22,7 +22,7 @@ import { spawn } from 'node:child_process';
 import { getBrand, saveBrand, missingBrand } from './brand.mjs';
 import { getSettings, saveSettings, usageToday, reelkitWindows, getClaudeToken, setClaudeToken, TASKS, modelFor, askClaude, claudeAvailable, CODE_ONLY, MODELS } from './claude.mjs';
 import { listInbox, resolveItem, getItem, addInbox } from './inbox.mjs';
-import { startRun, answerGate, listRuns, getRun, cancelRun, retryRun } from './autopilot.mjs';
+import { startRun, answerGate, listRuns, getRun, cancelRun, retryRun, skipStep } from './autopilot.mjs';
 import { listIdeas, setIdea, generateIdeas, referenceCount } from './ideas.mjs';
 import { addFromText } from './swipe.mjs';
 import { ensureBrowser, openSite } from './computer.mjs';
@@ -151,6 +151,7 @@ export function startDashboard({ port = 4177, lan = false, worker = true, open =
       if (p === '/api/run' && req.method === 'POST') return send(res, 200, startRun({ post: body.post, at: body.at || undefined, skipRefs: !!body.skipRefs, idea: body.idea }));
       if (p === '/api/jobs/retry' && req.method === 'POST') { const j = getJob(String(body.id || '')); if (!j || !['failed', 'cancelled'].includes(j.status)) return send(res, 400, { error: 'Only a failed or cancelled task can be retried' }); return send(res, 200, enqueue(j.type, j.payload)); }
       if (p === '/api/run/retry' && req.method === 'POST') { const r = retryRun(String(body.id || '')); return r ? send(res, 200, r) : send(res, 400, { error: 'Only a failed or cancelled run can be retried' }); }
+      if (p === '/api/run/skip' && req.method === 'POST') { const r = skipStep(String(body.id || '')); return r ? send(res, 200, r) : send(res, 400, { error: 'Nothing to skip right now. A step that is actively running has to finish or be cancelled first.' }); }
       if (p === '/api/run/cancel' && req.method === 'POST') return send(res, 200, cancelRun(body.id));
       if (p === '/api/inbox/answer' && req.method === 'POST') {
         const it = getItem(body.id); if (!it) return send(res, 404, { error: 'no such item' }); const a = body.answer || {}; const rid = it.payload?.runId;

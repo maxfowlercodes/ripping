@@ -237,3 +237,10 @@ test('YouTube Shorts flow works on a fake Studio page (upload, title, descriptio
     const pub = await publishYoutube(pg); assert.equal(pub.status, 'posted'); assert.match(pub.url, /shorts\/abc123/); pg.close();
   } finally { await b.close(); }
 });
+
+test('a stuck step can be skipped and the run continues with the next one', async () => {
+  const { startRun, getRun, skipStep, cancelRun, listRuns } = await import('../src/autopilot.mjs'); const { writeJson, home } = await import('../src/util.mjs'); const path = await import('node:path');
+  for (const x of listRuns()) cancelRun(x.id);
+  const r = startRun({ post: 'review' }); const f = getRun(r.id); f.status = 'waiting'; f.gate = { type: 'review', message: 'x' }; f.steps.forEach(s => { s.status = 'done'; }); const i = f.steps.findIndex(s => s.id === 'post'); f.steps[i].status = 'waiting'; f.steps[i + 1].status = 'pending'; writeJson(path.join(home(), 'runs', r.id + '.json'), f);
+  const n = skipStep(r.id); assert.equal(n.status, 'queued'); assert.equal(n.steps[i].status, 'skipped'); assert.equal(n.gate, null); assert.equal(skipStep(r.id), null); cancelRun(r.id);
+});

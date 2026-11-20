@@ -110,6 +110,7 @@ async function stepCaption(r) {
 async function stepPost(r) {
   const b = getBrand(); const slug = r.ctx.slug; const file = path.resolve(ensure916(path.resolve(reelDir(slug), 'reel.mp4'), m => logR(r, m))); const mode = r.opts.post || b.posting.mode; const method = r.opts.method || b.posting.method;
   if (mode === 'none') return 'not posting (render only)';
+  if (getMeta(slug)?.status === 'posted') return 'already posted, nothing to do';
   if (!String(r.ctx.caption || '').trim()) throw new Error('There is no caption for this reel, so nothing was posted. Retry and Reelkit will write one first.');
   if (r.opts.at && new Date(r.opts.at) > new Date()) throw new Wait({ type: 'time', until: r.opts.at, message: 'Scheduled for ' + r.opts.at });
   const markPosted = (extra = {}) => { const m = getMeta(slug); Object.assign(m, { status: 'posted', postedAt: new Date().toISOString(), postedVia: method, account: b.posting.account || m.account, ...extra }); saveMeta(slug, m); };
@@ -185,5 +186,14 @@ export function retryRun(id) {
   if (listRuns().some(x => ['queued', 'running', 'waiting'].includes(x.status))) return null;
   for (const s of r.steps) if (s.status === 'failed' || s.status === 'running' || s.status === 'waiting') { s.status = 'pending'; s.detail = ''; }
   if (r.ctx) { delete r.ctx.answers; if (r.ctx.prepared) delete r.ctx.prepared; } r.error = ''; r.gate = null; r.status = 'queued'; save(r); return r;
+}
+/** Skip the step a run is stuck on (waiting, failed, cancelled, or running with no progress) and carry on with the next one. */
+export function skipStep(id) {
+  const r = getRun(id); if (!r) return null; const stale = r.status === 'running' && Date.now() - (r.updated || 0) > 180000;
+  if (!['waiting', 'failed', 'cancelled'].includes(r.status) && !stale) return null;
+  if (listRuns().some(x => x.id !== r.id && ['queued', 'running', 'waiting'].includes(x.status))) return null;
+  const st = r.steps.find(x => ['failed', 'waiting', 'running'].includes(x.status)) || r.steps.find(x => x.status === 'pending'); if (!st) return null;
+  if (r.gate?.inboxId) resolveItem(r.gate.inboxId, { skipped: true }, 'dismissed');
+  st.status = 'skipped'; st.detail = 'skipped by you'; r.ctx = r.ctx || {}; delete r.ctx.answers; r.error = ''; r.gate = null; r.status = 'queued'; save(r); return r;
 }
 export function cancelRun(id) { const r = getRun(id); if (r && !['done', 'failed'].includes(r.status)) { r.status = 'cancelled'; if (r.gate?.inboxId) resolveItem(r.gate.inboxId, { cancelled: true }, 'dismissed'); save(r); } return r; }
